@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spmd-reflection-sim"
+version = "0.1.0"
+description = "AC-domain reflection/transfer simulation for SPMD mixing segments"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+  { name = "Leon Seemann" }
+]
+dependencies = [
+  "numpy",
+  "matplotlib",
+]
+
+[project.scripts]
+spmd-reflection-sim = "cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["spmd_reflection*"]
