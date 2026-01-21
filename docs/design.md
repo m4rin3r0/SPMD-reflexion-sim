@@ -77,8 +77,4 @@
 - Mixed-mode vs single-ended conventions may require mapping.
 - S21 normalization must be validated against a known reference.
 
-## Next Steps
-1) Create minimal example JSON.
-2) Implement Touchstone parser and S->Y conversion.
-3) Build topology and solver pipeline.
-4) Plot RL/IL per node.
+
