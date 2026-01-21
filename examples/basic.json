@@ -1,0 +1,23 @@
+{
+  "analysis": "ac",
+  "freq_start": 1e5,
+  "freq_stop": 4e7,
+  "npoints": 400,
+  "z0": 100,
+  "nodes": 4,
+  "length": 7,
+  "attach_points": null,
+  "drop_max": 0.10,
+  "random_drop": false,
+  "s2p": "examples/dummy.s2p",
+  "cable_model": {
+    "rdc": 0.0094,
+    "l": 20.6435e-9,
+    "c": 2.25026e-12,
+    "rskin": 1.134268e-5,
+    "ref_length": 0.05
+  },
+  "termination": {
+    "rterm": 100
+  }
+}
