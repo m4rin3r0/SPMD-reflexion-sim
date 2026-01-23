@@ -160,6 +160,7 @@ def build_topology(config: dict) -> Topology:
     if len(attach_points) != config["nodes"]:
         raise ValueError("attach_points count must match nodes")
 
+    # Trunk nodes include start and end of the cable, so there are nodes+2 trunk nodes.
     positions = [0.0] + attach_points + [float(config["length"])]
     trunk_nodes = list(range(len(positions)))
 
@@ -176,6 +177,8 @@ def build_topology(config: dict) -> Topology:
 
     next_node_index = len(positions)
     for n in range(config["nodes"]):
+        # Allocate separate internal nodes for each drop/PHY pair
+        # these are additional network nodes beyond the trunk attachment count.
         trunk_node = trunk_nodes[n + 1]
         drop_node = next_node_index
         next_node_index += 1
@@ -192,7 +195,7 @@ def build_topology(config: dict) -> Topology:
 
     tx_node = int(config.get("tx_node", 1))
     if tx_node < 1 or tx_node > config["nodes"]:
-        raise ValueError("tx_node must be within 1..nodes")
+        raise ValueError(f"tx_node must be within 1..{config['nodes']}")
 
     return Topology(
         trunk_segments=trunk_segments,

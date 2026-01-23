@@ -1,4 +1,4 @@
-"""Command-line entry point for spmd-reflection-sim."""
+"""Command-line entry point for spmd-reflection-sim"""
 
 from __future__ import annotations
 

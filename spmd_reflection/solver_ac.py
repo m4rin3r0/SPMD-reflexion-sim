@@ -18,6 +18,7 @@ class SimulationResults:
 
 
 def _yparams_line(length: float, cable: Dict[str, float], freq: float) -> np.ndarray:
+    """Return a 2-port Y-parameter matrix for a cable segment at one frequency."""
     rdc = cable["rdc"]
     rskin = cable["rskin"]
     l = cable["l"]
@@ -50,6 +51,7 @@ def run_ac_sim(
     z0: float,
     rterm: float,
 ) -> SimulationResults:
+    """Run AC simulation across frequency grid and return RL/IL results."""
     node_count = topology.node_count
     y_network = np.zeros((len(frequency), node_count, node_count), dtype=complex)
 
