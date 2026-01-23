@@ -43,19 +43,13 @@ def _yparams_line(length: float, cable: Dict[str, float], freq: float) -> np.nda
     return np.array([[y11, y12], [y12, y11]], dtype=complex)
 
 
-def run_ac_sim(
-    topology: Topology,
-    cable_model: Dict[str, float],
-    y_s2p: np.ndarray,
-    frequency: np.ndarray,
-    z0: float,
-    rterm: float,
-) -> SimulationResults:
+def run_ac_sim(topology: Topology, cable_model: Dict[str, float], y_s2p: np.ndarray, frequency: np.ndarray, z0: float, rterm: float) -> SimulationResults:
     """Run AC simulation across frequency grid and return RL/IL results."""
     node_count = topology.node_count
+    # One Y-matrix per frequency point (complex nodal admittance).
     y_network = np.zeros((len(frequency), node_count, node_count), dtype=complex)
 
-    # Trunk segments
+    # Stamp trunk segments into the global Y-matrix.
     for seg in topology.trunk_segments:
         for idx, freq in enumerate(frequency):
             y = _yparams_line(seg.length, cable_model, freq)
@@ -66,7 +60,7 @@ def run_ac_sim(
             y_network[idx, b, a] += y[1, 0]
             y_network[idx, b, b] += y[1, 1]
 
-    # Drop segments
+    # Stamp drop segments (trunk -> drop).
     for drop in topology.drop_segments:
         for idx, freq in enumerate(frequency):
             y = _yparams_line(drop.length, cable_model, freq)
@@ -77,7 +71,7 @@ def run_ac_sim(
             y_network[idx, b, a] += y[1, 0]
             y_network[idx, b, b] += y[1, 1]
 
-    # Node S2P links (drop -> phy)
+    # Stamp S2P node links (drop -> phy) using S->Y conversion.
     for link in topology.node_links:
         for idx in range(len(frequency)):
             y = y_s2p[idx]
@@ -88,18 +82,21 @@ def run_ac_sim(
             y_network[idx, b, a] += y[1, 0]
             y_network[idx, b, b] += y[1, 1]
 
-    # Terminations to ground at start/end trunk nodes
+    # Add shunt terminations at the trunk ends.
     if rterm > 0:
         y_term = 1.0 / rterm
         y_network[:, topology.start_node, topology.start_node] += y_term
         y_network[:, topology.end_node, topology.end_node] += y_term
 
+    # Output arrays for return loss and insertion loss.
     s11_db = np.zeros(len(frequency))
     s21_db = np.zeros((len(frequency), len(topology.phy_nodes)))
     gain_db = np.zeros((len(frequency), len(topology.phy_nodes)))
 
+    # Norton source at TX with reference impedance Z0.
     ysrc = 1.0 / z0
     for idx, freq in enumerate(frequency):
+        # Build RHS with source current injection at TX.
         y_total = y_network[idx].copy()
         i_vec = np.zeros(node_count, dtype=complex)
 
@@ -107,16 +104,20 @@ def run_ac_sim(
         y_total[tx, tx] += ysrc
         i_vec[tx] = ysrc
 
+        # Solve nodal voltages for this frequency.
         v = np.linalg.solve(y_total, i_vec)
+        # Recover port currents into the network.
         i_network = y_network[idx] @ v
         i_tx = i_vec[tx] - ysrc * v[tx]
 
+        # Convert port voltage/current to incident/reflected waves.
         vin = v[tx]
         a1 = vin + i_tx * z0
         b1 = vin - i_tx * z0
         s11 = a1 / b1
         s11_db[idx] = 20 * np.log10(max(np.abs(s11), 1e-30))
 
+        # Evaluate S21 and voltage gain for each PHY node.
         for n, phy in enumerate(topology.phy_nodes):
             vend = v[phy]
             iend = i_network[phy]
