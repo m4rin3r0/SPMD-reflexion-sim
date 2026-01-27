@@ -114,7 +114,7 @@ def run_ac_sim(topology: Topology, cable_model: Dict[str, float], y_s2p: np.ndar
         vin = v[tx]
         a1 = vin + i_tx * z0
         b1 = vin - i_tx * z0
-        s11 = a1 / b1
+        s11 = b1 / b1
         s11_db[idx] = 20 * np.log10(max(np.abs(s11), 1e-30))
 
         # Evaluate S21 and voltage gain for each PHY node.
