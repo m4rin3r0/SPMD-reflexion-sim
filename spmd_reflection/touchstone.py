@@ -123,7 +123,7 @@ def s_to_y(s_params: np.ndarray, z0: float) -> np.ndarray:
 
 def interpolate_s_params(data: TouchstoneData, target_freq: np.ndarray) -> np.ndarray:
     """Interpolate S-parameters to target frequencies (linear on real/imag)."""
-    s_interp = np.zeros((len(target_freq), 2, 2), dtype=complex)
+    s_interp = np.zeros((len(target_freq), 2, 2), dtype=complex) # empty 2x2 matrix for each freq
     for i in range(2):
         for j in range(2):
             real = np.interp(target_freq, data.frequency, data.s_params[:, i, j].real)
