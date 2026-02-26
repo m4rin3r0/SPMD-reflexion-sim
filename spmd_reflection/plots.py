@@ -17,8 +17,8 @@ def plot_results(results: SimulationResults, output_path: Optional[str] = None) 
     ax1.grid(True, alpha=0.3)
     ax1.legend()
 
-    for idx in range(results.gain_db.shape[1]):
-        ax2.plot(freq_mhz, results.gain_db[:, idx], label=f"Node {idx+1}")
+    for idx in range(results.s21_db.shape[1]):
+        ax2.plot(freq_mhz, results.s21_db[:, idx], label=f"Node {idx+1}")
 
     ax2.set_xlabel("Frequency (MHz)")
     ax2.set_ylabel("IL (dB)")
