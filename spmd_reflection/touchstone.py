@@ -48,8 +48,8 @@ def _to_complex(format: str, a: np.ndarray, b: np.ndarray) -> np.ndarray:
     raise ValueError("Unsupported format")
 
 
-def parse_s2p(path: str) -> TouchstoneData:
-    """Parse a Touchstone .s2p file into frequency, S-parameter matrix, and Z0."""
+def _parse_s2p_lines(lines: List[str]) -> TouchstoneData:
+    """Parse Touchstone .s2p content from a list of text lines."""
     freq_unit = "hz"
     data_format = "ri"
     z0 = 50.0
@@ -57,31 +57,30 @@ def parse_s2p(path: str) -> TouchstoneData:
     frequencies: List[float] = []
     values: List[float] = []
 
-    with open(path, "r") as handle:
-        for line in handle:
-            line = line.strip()
-            if not line or line.startswith("!"):
-                continue
-            if line.startswith("#"):
-                # Header line defines frequency unit, data format, and reference impedance.
-                parts = line[1:].split()
-                if len(parts) >= 4:
-                    freq_unit = parts[0]
-                    data_format = parts[2]
-                    if parts[3].lower() == "r" and len(parts) >= 5:
-                        z0 = float(parts[4])
-                continue
-            if "!" in line:
-                # Strip inline comments to keep only numeric data.
-                line = line.split("!", 1)[0].strip()
-            if not line:
-                continue
-            tokens = line.split()
-            if len(tokens) < 9:
-                continue
-            # First token is frequency, remaining are S11/S21/S12/S22 pairs.
-            frequencies.append(float(tokens[0]))
-            values.extend(float(tok) for tok in tokens[1:9])
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("!"):
+            continue
+        if line.startswith("#"):
+            # Header line defines frequency unit, data format, and reference impedance.
+            parts = line[1:].split()
+            if len(parts) >= 4:
+                freq_unit = parts[0]
+                data_format = parts[2]
+                if parts[3].lower() == "r" and len(parts) >= 5:
+                    z0 = float(parts[4])
+            continue
+        if "!" in line:
+            # Strip inline comments to keep only numeric data.
+            line = line.split("!", 1)[0].strip()
+        if not line:
+            continue
+        tokens = line.split()
+        if len(tokens) < 9:
+            continue
+        # First token is frequency, remaining are S11/S21/S12/S22 pairs.
+        frequencies.append(float(tokens[0]))
+        values.extend(float(tok) for tok in tokens[1:9])
 
     if not frequencies:
         raise ValueError("No S-parameter data found.")
@@ -107,6 +106,17 @@ def parse_s2p(path: str) -> TouchstoneData:
     s_params[:, 1, 1] = s22
 
     return TouchstoneData(frequency=freq_arr, s_params=s_params, z0=float(z0))
+
+
+def parse_s2p(path: str) -> TouchstoneData:
+    """Parse a Touchstone .s2p file into frequency, S-parameter matrix, and Z0."""
+    with open(path, "r", encoding="utf-8") as handle:
+        return _parse_s2p_lines(handle.readlines())
+
+
+def parse_s2p_text(text: str) -> TouchstoneData:
+    """Parse Touchstone .s2p content from an in-memory text string."""
+    return _parse_s2p_lines(text.splitlines())
 
 
 def s_to_y(s_params: np.ndarray, z0: float) -> np.ndarray:

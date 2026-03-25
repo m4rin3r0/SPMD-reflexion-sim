@@ -6,6 +6,7 @@ import argparse
 import numpy as np
 
 from spmd_reflection.config import load_config
+from spmd_reflection.measurement_import import load_differential_s2p_from_archive
 from spmd_reflection.topology import build_topology
 from spmd_reflection.touchstone import parse_s2p, interpolate_s_params, s_to_y
 from spmd_reflection.solver_ac import run_ac_sim
@@ -16,6 +17,12 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="SPMD reflection AC simulator")
     parser.add_argument("--json", type=str, default=None, help="Path to JSON config")
     parser.add_argument("--s2p", type=str, default=None, help="Global S2P file")
+    parser.add_argument(
+        "--s2p-zip",
+        type=str,
+        default=None,
+        help="ZIP archive containing the measured single-ended S2P files",
+    )
     parser.add_argument("--freq_start", type=float, default=None)
     parser.add_argument("--freq_stop", type=float, default=None)
     parser.add_argument("--npoints", type=int, default=None)
@@ -43,6 +50,8 @@ def main() -> None:
     overrides = {}
     if args.s2p:
         overrides["s2p"] = args.s2p
+    if args.s2p_zip:
+        overrides["s2p_zip"] = args.s2p_zip
     if args.freq_start is not None:
         overrides["freq_start"] = args.freq_start
     if args.freq_stop is not None:
@@ -80,10 +89,14 @@ def main() -> None:
 
     config = load_config(args.json, overrides)
 
+    if config.data.get("s2p_zip"):
+        touchstone = load_differential_s2p_from_archive(config.data["s2p_zip"])
+    else:
+        touchstone = parse_s2p(config.data["s2p"])
+
     freq = np.linspace(config.freq_start, config.freq_stop, config.npoints)
     topo = build_topology(config.data)
 
-    touchstone = parse_s2p(config.data["s2p"])
     s_interp = interpolate_s_params(touchstone, freq)
     y_s2p = s_to_y(s_interp, touchstone.z0)
 

@@ -28,6 +28,7 @@ DEFAULTS: Dict[str, Any] = {
     "seed": -1,
     "tx_node": 1,
     "s2p": None,
+    "s2p_zip": None,
     "cable_model": {
         "rdc": 0.0094,
         "l": 20.6435e-9,
@@ -93,5 +94,7 @@ def _validate(data: Dict[str, Any]) -> None:
         raise ValueError("freq_stop must be greater than freq_start.")
     if data["npoints"] < 2:
         raise ValueError("npoints must be >= 2.")
-    if not data.get("s2p"):
-        raise ValueError("s2p path is required for v0.")
+    if data.get("s2p") and data.get("s2p_zip"):
+        raise ValueError("Provide either 's2p' or 's2p_zip', not both.")
+    if not data.get("s2p") and not data.get("s2p_zip"):
+        raise ValueError("Either 's2p' or 's2p_zip' path is required.")
