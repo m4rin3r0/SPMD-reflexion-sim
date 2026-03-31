@@ -15,6 +15,7 @@ class SimulationResults:
     s11_db: np.ndarray
     gain_db: np.ndarray
     s21_db: np.ndarray
+    tx_node_index: int
 
 
 def _yparams_line(length: float, cable: Dict[str, float], freq: float) -> np.ndarray:
@@ -46,6 +47,7 @@ def _yparams_line(length: float, cable: Dict[str, float], freq: float) -> np.nda
 def run_ac_sim(topology: Topology, cable_model: Dict[str, float], y_s2p: np.ndarray, frequency: np.ndarray, z0: float, rterm: float) -> SimulationResults:
     """Run AC simulation across frequency grid and return RL/IL results."""
     node_count = topology.node_count
+    tx_node_index = topology.phy_nodes.index(topology.tx_phy_node)
     # One Y-matrix per frequency point (complex nodal admittance).
     y_network = np.zeros((len(frequency), node_count, node_count), dtype=complex)
 
@@ -96,32 +98,36 @@ def run_ac_sim(topology: Topology, cable_model: Dict[str, float], y_s2p: np.ndar
     # Norton source at TX with reference impedance Z0.
     ysrc = 1.0 / z0
     for idx, freq in enumerate(frequency):
-        # Build RHS with source current injection at TX.
+        # Build RHS with matched terminations at every PHY port and excite only the TX port.
         y_total = y_network[idx].copy()
         i_vec = np.zeros(node_count, dtype=complex)
 
-        tx = topology.tx_phy_node
-        y_total[tx, tx] += ysrc
-        i_vec[tx] = ysrc
+        for phy in topology.phy_nodes:
+            y_total[phy, phy] += ysrc
+
+        tx_phy = topology.tx_phy_node
+        i_vec[tx_phy] = ysrc
 
         # Solve nodal voltages for this frequency.
         v = np.linalg.solve(y_total, i_vec)
-        # Recover port currents into the network.
-        i_network = y_network[idx] @ v
-        i_tx = i_vec[tx] - ysrc * v[tx]
+        i_tx = i_vec[tx_phy] - ysrc * v[tx_phy]
 
         # Convert port voltage/current to incident/reflected waves.
-        vin = v[tx]
+        vin = v[tx_phy]
         a1 = vin + i_tx * z0
         b1 = vin - i_tx * z0
         s11 = b1 / a1
         s11_db[idx] = 20 * np.log10(max(np.abs(s11), 1e-30))
 
-        # Evaluate S21 and voltage gain for each PHY node.
+        # Evaluate S21 and voltage gain for each non-TX PHY node.
         for n, phy in enumerate(topology.phy_nodes):
+            if phy == tx_phy:
+                s21_db[idx, n] = np.nan
+                gain_db[idx, n] = np.nan
+                continue
+
             vend = v[phy]
-            iend = i_network[phy]
-            a2 = vend + iend * z0
+            iend = -ysrc * vend
             b2 = vend - iend * z0
             s21 = b2 / a1
             gain = vend / vin if vin != 0 else 0.0
@@ -133,4 +139,5 @@ def run_ac_sim(topology: Topology, cable_model: Dict[str, float], y_s2p: np.ndar
         s11_db=s11_db,
         gain_db=gain_db,
         s21_db=s21_db,
+        tx_node_index=tx_node_index,
     )
