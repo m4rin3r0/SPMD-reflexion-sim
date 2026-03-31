@@ -18,6 +18,8 @@ def plot_results(results: SimulationResults, output_path: Optional[str] = None) 
     ax1.legend()
 
     for idx in range(results.s21_db.shape[1]):
+        if idx == results.tx_node_index:
+            continue
         ax2.plot(freq_mhz, results.s21_db[:, idx], label=f"Node {idx+1}")
 
     ax2.set_xlabel("Frequency (MHz)")
