@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 import numpy as np
 
 from spmd_reflection.config import load_config
 from spmd_reflection.measurement_import import load_differential_s2p_from_archive
 from spmd_reflection.topology import build_topology
-from spmd_reflection.touchstone import parse_s2p, interpolate_s_params, s_to_y
+from spmd_reflection.touchstone import parse_s2p, interpolate_s_params, s_to_y, write_s2p
 from spmd_reflection.solver_ac import run_ac_sim
 from spmd_reflection.plots import plot_results
 
@@ -40,6 +41,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--tx_node", type=int, default=None)
     parser.add_argument("--rterm", type=float, default=None)
+    parser.add_argument(
+        "--export-s2p",
+        type=str,
+        default=None,
+        help="Optional output path for the differential S2P generated from --s2p-zip",
+    )
     parser.add_argument("--plot", type=str, default=None, help="Save plot to file")
     return parser.parse_args()
 
@@ -91,6 +98,12 @@ def main() -> None:
 
     if config.data.get("s2p_zip"):
         touchstone = load_differential_s2p_from_archive(config.data["s2p_zip"])
+        export_path = args.export_s2p
+        if export_path is None:
+            zip_path = Path(config.data["s2p_zip"])
+            export_path = str(zip_path.with_name(f"{zip_path.stem}_differential.s2p"))
+        write_s2p(export_path, touchstone)
+        print(f"Exported differential S2P to: {export_path}")
     else:
         touchstone = parse_s2p(config.data["s2p"])
 
