@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Tuple
 import numpy as np
 
@@ -117,6 +118,30 @@ def parse_s2p(path: str) -> TouchstoneData:
 def parse_s2p_text(text: str) -> TouchstoneData:
     """Parse Touchstone .s2p content from an in-memory text string."""
     return _parse_s2p_lines(text.splitlines())
+
+
+def write_s2p(path: str, data: TouchstoneData, freq_unit: str = "Hz") -> None:
+    """Write a 2-port Touchstone file in RI format."""
+    if data.s_params.ndim != 3 or data.s_params.shape[1:] != (2, 2):
+        raise ValueError("write_s2p expects a 2-port TouchstoneData object.")
+
+    unit_scale = _unit_scale(freq_unit)
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_path, "w", encoding="utf-8") as handle:
+        handle.write("! Differential S-parameters generated from single-ended measurements\n")
+        handle.write(f"# {freq_unit} S RI R {data.z0:.12g}\n")
+        for idx, freq in enumerate(data.frequency):
+            s = data.s_params[idx]
+            freq_out = freq / unit_scale
+            handle.write(
+                f"{freq_out:.12g} "
+                f"{s[0, 0].real:.12g} {s[0, 0].imag:.12g} "
+                f"{s[1, 0].real:.12g} {s[1, 0].imag:.12g} "
+                f"{s[0, 1].real:.12g} {s[0, 1].imag:.12g} "
+                f"{s[1, 1].real:.12g} {s[1, 1].imag:.12g}\n"
+            )
 
 
 def s_to_y(s_params: np.ndarray, z0: float) -> np.ndarray:
