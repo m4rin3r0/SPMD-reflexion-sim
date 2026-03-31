@@ -168,21 +168,29 @@ def convert_single_ended_to_differential(data: TouchstoneData) -> TouchstoneData
     if data.s_params.ndim != 3 or data.s_params.shape[1:] != (4, 4):
         raise ValueError("Expected a 4-port single-ended S-matrix for conversion.")
 
-    transform = (1.0 / np.sqrt(2.0)) * np.array(
-        [
-            [1.0, -1.0, 0.0, 0.0],
-            [1.0, 1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, -1.0],
-            [0.0, 0.0, 1.0, 1.0],
-        ],
-        dtype=complex,
-    )
-    transform_inv = transform.conj().T
-
     s_diff = np.zeros((len(data.frequency), 2, 2), dtype=complex)
-    for idx, s_single in enumerate(data.s_params):
-        s_mixed = transform @ s_single @ transform_inv
-        s_diff[idx] = s_mixed[np.ix_([0, 2], [0, 2])]
+    s11 = data.s_params[:, 0, 0]
+    s12 = data.s_params[:, 0, 1]
+    s13 = data.s_params[:, 0, 2]
+    s14 = data.s_params[:, 0, 3]
+    s21 = data.s_params[:, 1, 0]
+    s22 = data.s_params[:, 1, 1]
+    s23 = data.s_params[:, 1, 2]
+    s24 = data.s_params[:, 1, 3]
+    s31 = data.s_params[:, 2, 0]
+    s32 = data.s_params[:, 2, 1]
+    s33 = data.s_params[:, 2, 2]
+    s34 = data.s_params[:, 2, 3]
+    s41 = data.s_params[:, 3, 0]
+    s42 = data.s_params[:, 3, 1]
+    s43 = data.s_params[:, 3, 2]
+    s44 = data.s_params[:, 3, 3]
+
+    # Differential 2-port reduction for the port pairs (1,2) and (3,4).
+    s_diff[:, 0, 0] = 0.5 * (s11 - s12 - s21 + s22)
+    s_diff[:, 0, 1] = 0.5 * (s13 - s14 - s23 + s24)
+    s_diff[:, 1, 0] = 0.5 * (s31 - s32 - s41 + s42)
+    s_diff[:, 1, 1] = 0.5 * (s33 - s34 - s43 + s44)
 
     return TouchstoneData(
         frequency=data.frequency.copy(),
