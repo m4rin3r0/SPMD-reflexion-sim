@@ -16,8 +16,6 @@ DEFAULTS: Dict[str, Any] = {
     "nodes": 16,
     "length": 100.0,
     "attach_points": None,
-    "drop_max": 0.02,
-    "random_drop": False,
     "random_attach": False,
     "separation_min": 1.0,
     "start_pad": 0.0,
@@ -29,15 +27,14 @@ DEFAULTS: Dict[str, Any] = {
     "tx_node": 1,
     "s2p": None,
     "s2p_zip": None,
+    "jumped_s2p": None,
+    "jumped_s2p_zip": None,
     "cable_model": {
         "rdc": 0.0094,
         "l": 20.6435e-9,
         "c": 2.25026e-12,
         "rskin": 1.134268e-5,
         "ref_length": 0.05,
-    },
-    "termination": {
-        "rterm": 100.0,
     },
 }
 
@@ -98,3 +95,7 @@ def _validate(data: Dict[str, Any]) -> None:
         raise ValueError("Provide either 's2p' or 's2p_zip', not both.")
     if not data.get("s2p") and not data.get("s2p_zip"):
         raise ValueError("Either 's2p' or 's2p_zip' path is required.")
+    if data.get("jumped_s2p") and data.get("jumped_s2p_zip"):
+        raise ValueError("Provide either 'jumped_s2p' or 'jumped_s2p_zip', not both.")
+    if not data.get("jumped_s2p") and not data.get("jumped_s2p_zip"):
+        raise ValueError("Either 'jumped_s2p' or 'jumped_s2p_zip' path is required.")
