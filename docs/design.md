@@ -2,20 +2,21 @@
 
 ## Goal
 - AC-domain solver in Python, no LTspice dependency
-- Global `.s2p` applied to all nodes
+- RX drop `.s2p` used as one-port shunt load
+- TX jumped `.s2p` used as inline two-port
 - RL/IL plots (S11/S21)
 - JSON + CLI configuration
 
 ## Architecture & Data Flow
 1) `cli.py`
-   - Parse CLI args (e.g. `--json`, `--s2p`, `--freq_start`, `--freq_stop`, `--npoints`).
+   - Parse CLI args (e.g. `--json`, `--s2p`, `--jumped-s2p`, `--freq_start`, `--freq_stop`, `--npoints`).
    - Hand off to `config.py`.
 2) `config.py`
    - Load defaults + JSON.
    - Validate required fields.
    - Produce canonical config.
 3) `topology.py`
-   - Build trunk, drops, nodes, terminations.
+   - Build trunk plus inline/shunt node placements.
    - Provide node/port indices for solver.
 4) `touchstone.py`
    - Parse S2P (frequency, S-matrix, Z0).
@@ -31,12 +32,13 @@
 
 ## Modeling Assumptions (v0)
 - Differential ports are treated as a single port with `Z0_diff` (default 100 ohm).
-- Node S2P represents a 2-port between drop end and PHY port.
-- Node load is assumed included in the S2P; no extra rnode/cnode.
-- Drops remain explicit cable elements.
+- RX node S2P already represents the full measured drop and node under realistic conditions.
+- RX nodes are stamped as one-port shunt admittances using the differential `S11`; no extra drop cable or termination is added.
+- TX node is stamped as an inline two-port using the jumped measurement.
 
 ## Solver Approach
-- Stamp 2-port Y-parameters into a global Y matrix.
+- Stamp trunk cable segments and the TX jumped two-port into a global Y matrix.
+- Stamp RX nodes as shunt one-port admittances at the trunk attachment points.
 - Use a Norton source with reference impedance `Z0` at the TX port.
 - Derive S11/S21 from solved port voltages and currents.
 
@@ -58,17 +60,15 @@
   "nodes": 16,
   "length": 100,
   "attach_points": null,
-  "drop_max": 0.02,
-  "random_drop": false,
-  "s2p": "path/to/node.s2p",
+  "s2p": "path/to/rx_drop.s2p",
+  "jumped_s2p": "path/to/tx_jumped.s2p",
   "cable_model": {
     "rdc": 0.0094,
     "l": 20.6435e-9,
     "c": 2.25026e-12,
     "rskin": 1.134268e-5,
     "ref_length": 0.05
-  },
-  "termination": { "rterm": 100 }
+  }
 }
 ```
 
@@ -76,5 +76,4 @@
 - S2P format and Z0 need validation with real files.
 - Mixed-mode vs single-ended conventions may require mapping.
 - S21 normalization must be validated against a known reference.
-
 

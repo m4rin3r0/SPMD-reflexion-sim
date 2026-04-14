@@ -4,7 +4,8 @@ Frequency-domain reflection/transfer simulation for SPMD mixing segments with To
 
 ## Scope (v0)
 - AC-domain solver (no LTspice dependency)
-- Global S2P applied to all nodes
+- RX drop S2P used as shunt 1-port loads
+- TX jumped S2P used as inline 2-port
 - RL/IL plots
 - JSON + CLI configuration
 
@@ -22,16 +23,27 @@ pip install -e .
 
 ## Quick start
 ```bash
-python cli.py --json examples/basic.json --s2p /path/to/node.s2p
+python cli.py --json examples/basic.json --s2p /path/to/rx_drop.s2p --jumped-s2p /path/to/tx_jumped.s2p
 ```
 
 To save plots:
 ```bash
-python cli.py --json examples/basic.json --s2p /path/to/node.s2p --plot results.png
+python cli.py --json examples/basic.json --s2p /path/to/rx_drop.s2p --jumped-s2p /path/to/tx_jumped.s2p --plot results.png
+```
+
+GUI launcher:
+```bash
+python gui.py
+```
+
+Or after editable install:
+```bash
+spmd-reflection-sim-gui
 ```
 
 ## Configuration
-See `examples/basic.json` for the minimal schema. The `s2p` field is required.
+See `examples/basic.json` for the minimal schema. The fields `s2p` and `jumped_s2p` are required.
 
 ## Notes
-This solver treats differential ports as a single port with `z0` (default 100 ohm).
+This solver treats the RX drop measurement as a one-port load using its differential `S11`.
+The TX node is modeled as an inline differential two-port from the jumped measurement.
