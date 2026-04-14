@@ -4,25 +4,24 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-import numpy as np
-
-from spmd_reflection.config import load_config
-from spmd_reflection.measurement_import import load_differential_s2p_from_archive
-from spmd_reflection.topology import build_topology
-from spmd_reflection.touchstone import parse_s2p, interpolate_s_params, s_to_y, write_s2p
-from spmd_reflection.solver_ac import run_ac_sim
-from spmd_reflection.plots import plot_results
 
 
-def _parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="SPMD reflection AC simulator")
     parser.add_argument("--json", type=str, default=None, help="Path to JSON config")
-    parser.add_argument("--s2p", type=str, default=None, help="Global S2P file")
+    parser.add_argument("--s2p", type=str, default=None, help="RX drop S2P file")
     parser.add_argument(
         "--s2p-zip",
         type=str,
         default=None,
-        help="ZIP archive containing the measured single-ended S2P files",
+        help="ZIP archive or directory containing the RX drop measurements",
+    )
+    parser.add_argument("--jumped-s2p", type=str, default=None, help="TX jumped S2P file")
+    parser.add_argument(
+        "--jumped-s2p-zip",
+        type=str,
+        default=None,
+        help="ZIP archive or directory containing the TX jumped measurements",
     )
     parser.add_argument("--freq_start", type=float, default=None)
     parser.add_argument("--freq_stop", type=float, default=None)
@@ -30,8 +29,6 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--z0", type=float, default=None)
     parser.add_argument("--nodes", type=int, default=None)
     parser.add_argument("--length", type=float, default=None)
-    parser.add_argument("--drop_max", type=float, default=None)
-    parser.add_argument("--random_drop", action="store_true")
     parser.add_argument("--random_attach", action="store_true")
     parser.add_argument("--separation_min", type=float, default=None)
     parser.add_argument("--start_pad", type=float, default=None)
@@ -40,18 +37,52 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--end_attach", type=int, default=None)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--tx_node", type=int, default=None)
-    parser.add_argument("--rterm", type=float, default=None)
     parser.add_argument(
         "--export-s2p",
         type=str,
         default=None,
-        help="Optional output path for the differential S2P generated from --s2p-zip",
+        help="Optional output path for the differential RX drop S2P generated from --s2p-zip",
+    )
+    parser.add_argument(
+        "--export-jumped-s2p",
+        type=str,
+        default=None,
+        help="Optional output path for the differential TX jumped S2P generated from --jumped-s2p-zip",
+    )
+    parser.add_argument(
+        "--plot-repeated",
+        type=str,
+        default=None,
+        help="Optional output path for a comparison plot of repeated single-ended S-parameter measurements from --s2p-zip",
     )
     parser.add_argument("--plot", type=str, default=None, help="Save plot to file")
-    return parser.parse_args()
+    return parser
+
+
+def _parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
 
 
 def main() -> None:
+    import numpy as np
+
+    from spmd_reflection.config import load_config
+    from spmd_reflection.measurement_import import (
+        build_single_ended_4port,
+        convert_single_ended_to_differential,
+        load_measurement_archive,
+    )
+    from spmd_reflection.topology import build_topology
+    from spmd_reflection.touchstone import (
+        interpolate_s_params,
+        parse_s2p,
+        s11_to_y,
+        s_to_y,
+        write_s2p,
+    )
+    from spmd_reflection.solver_ac import run_ac_sim
+    from spmd_reflection.plots import plot_repeated_measurement_traces, plot_results
+
     args = _parse_args()
 
     overrides = {}
@@ -59,6 +90,10 @@ def main() -> None:
         overrides["s2p"] = args.s2p
     if args.s2p_zip:
         overrides["s2p_zip"] = args.s2p_zip
+    if args.jumped_s2p:
+        overrides["jumped_s2p"] = args.jumped_s2p
+    if args.jumped_s2p_zip:
+        overrides["jumped_s2p_zip"] = args.jumped_s2p_zip
     if args.freq_start is not None:
         overrides["freq_start"] = args.freq_start
     if args.freq_stop is not None:
@@ -71,10 +106,6 @@ def main() -> None:
         overrides["nodes"] = args.nodes
     if args.length is not None:
         overrides["length"] = args.length
-    if args.drop_max is not None:
-        overrides["drop_max"] = args.drop_max
-    if args.random_drop:
-        overrides["random_drop"] = True
     if args.random_attach:
         overrides["random_attach"] = True
     if args.separation_min is not None:
@@ -91,35 +122,54 @@ def main() -> None:
         overrides["seed"] = args.seed
     if args.tx_node is not None:
         overrides["tx_node"] = args.tx_node
-    if args.rterm is not None:
-        overrides.setdefault("termination", {})["rterm"] = args.rterm
 
     config = load_config(args.json, overrides)
 
     if config.data.get("s2p_zip"):
-        touchstone = load_differential_s2p_from_archive(config.data["s2p_zip"])
+        archive = load_measurement_archive(config.data["s2p_zip"])
+        if args.plot_repeated:
+            plot_repeated_measurement_traces(archive, output_path=args.plot_repeated)
+            print(f"Exported repeated-trace comparison plot to: {args.plot_repeated}")
+
+        single_ended = build_single_ended_4port(archive)
+        rx_touchstone = convert_single_ended_to_differential(single_ended)
         export_path = args.export_s2p
         if export_path is None:
             zip_path = Path(config.data["s2p_zip"])
             export_path = str(zip_path.with_name(f"{zip_path.stem}_differential.s2p"))
-        write_s2p(export_path, touchstone)
+        write_s2p(export_path, rx_touchstone)
         print(f"Exported differential S2P to: {export_path}")
     else:
-        touchstone = parse_s2p(config.data["s2p"])
+        rx_touchstone = parse_s2p(config.data["s2p"])
+
+    if config.data.get("jumped_s2p_zip"):
+        jumped_archive = load_measurement_archive(config.data["jumped_s2p_zip"])
+        jumped_single_ended = build_single_ended_4port(jumped_archive)
+        tx_touchstone = convert_single_ended_to_differential(jumped_single_ended)
+        export_jumped_path = args.export_jumped_s2p
+        if export_jumped_path is None:
+            zip_path = Path(config.data["jumped_s2p_zip"])
+            export_jumped_path = str(zip_path.with_name(f"{zip_path.stem}_differential.s2p"))
+        write_s2p(export_jumped_path, tx_touchstone)
+        print(f"Exported jumped differential S2P to: {export_jumped_path}")
+    else:
+        tx_touchstone = parse_s2p(config.data["jumped_s2p"])
 
     freq = np.linspace(config.freq_start, config.freq_stop, config.npoints)
     topo = build_topology(config.data)
 
-    s_interp = interpolate_s_params(touchstone, freq)
-    y_s2p = s_to_y(s_interp, touchstone.z0)
+    rx_interp = interpolate_s_params(rx_touchstone, freq)
+    tx_interp = interpolate_s_params(tx_touchstone, freq)
+    rx_shunt_y = s11_to_y(rx_interp[:, 0, 0], rx_touchstone.z0)
+    tx_y = s_to_y(tx_interp, tx_touchstone.z0)
 
     results = run_ac_sim(
         topology=topo,
         cable_model=config.data["cable_model"],
-        y_s2p=y_s2p,
+        rx_shunt_y=rx_shunt_y,
+        tx_y=tx_y,
         frequency=freq,
         z0=config.z0,
-        rterm=config.data["termination"]["rterm"],
     )
 
     plot_results(results, output_path=args.plot)

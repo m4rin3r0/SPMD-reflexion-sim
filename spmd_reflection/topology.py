@@ -1,10 +1,9 @@
-"""Topology definitions for trunk, drops, nodes, and terminations."""
+"""Topology definitions for trunk segments and inline/shunt node models."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
-import math
+from typing import List, Optional
 import random
 
 
@@ -16,25 +15,19 @@ class TrunkSegment:
 
 
 @dataclass
-class DropSegment:
+class RxNode:
     trunk_node: int
-    drop_node: int
-    length: float
-
-
-@dataclass
-class NodeLink:
-    drop_node: int
-    phy_node: int
+    node_index: int
 
 
 @dataclass
 class Topology:
     trunk_segments: List[TrunkSegment]
-    drop_segments: List[DropSegment]
-    node_links: List[NodeLink]
-    phy_nodes: List[int]
-    tx_phy_node: int
+    rx_nodes: List[RxNode]
+    node_probe_nodes: List[int]
+    tx_left_node: int
+    tx_right_node: int
+    tx_node_index: int
     start_node: int
     end_node: int
     node_count: int
@@ -160,50 +153,58 @@ def build_topology(config: dict) -> Topology:
     if len(attach_points) != config["nodes"]:
         raise ValueError("attach_points count must match nodes")
 
-    # Trunk nodes include start and end of the cable, so there are nodes+2 trunk nodes.
-    positions = [0.0] + attach_points + [float(config["length"])]
-    trunk_nodes = list(range(len(positions)))
-
-    trunk_segments: List[TrunkSegment] = []
-    for idx in range(len(positions) - 1):
-        length = positions[idx + 1] - positions[idx]
-        if length <= 0:
-            continue
-        trunk_segments.append(TrunkSegment(trunk_nodes[idx], trunk_nodes[idx + 1], length))
-
-    drop_segments: List[DropSegment] = []
-    node_links: List[NodeLink] = []
-    phy_nodes: List[int] = []
-
-    next_node_index = len(positions)
-    for n in range(config["nodes"]):
-        # Allocate separate internal nodes for each drop/PHY pair
-        # these are additional network nodes beyond the trunk attachment count.
-        trunk_node = trunk_nodes[n + 1]
-        drop_node = next_node_index
-        next_node_index += 1
-        phy_node = next_node_index
-        next_node_index += 1
-
-        drop_length = float(config["drop_max"])
-        if config.get("random_drop"):
-            drop_length = random.uniform(0.0, drop_length)
-
-        drop_segments.append(DropSegment(trunk_node=trunk_node, drop_node=drop_node, length=drop_length))
-        node_links.append(NodeLink(drop_node=drop_node, phy_node=phy_node))
-        phy_nodes.append(phy_node)
-
     tx_node = int(config.get("tx_node", 1))
     if tx_node < 1 or tx_node > config["nodes"]:
         raise ValueError(f"tx_node must be within 1..{config['nodes']}")
 
+    next_node_index = 0
+    start_node = next_node_index
+    next_node_index += 1
+    positions = [0.0] + attach_points
+    tx_left_node = start_node
+    tx_right_node = start_node
+
+    rx_nodes: List[RxNode] = []
+    node_probe_nodes: List[int] = []
+    trunk_segments: List[TrunkSegment] = []
+    prev_node = start_node
+
+    for n, attach in enumerate(attach_points, start=1):
+        segment_length = attach - positions[n - 1]
+        if segment_length > 0:
+            attach_left_node = next_node_index
+            next_node_index += 1
+            trunk_segments.append(TrunkSegment(prev_node, attach_left_node, segment_length))
+        else:
+            attach_left_node = prev_node
+
+        if n == tx_node:
+            tx_left_node = attach_left_node
+            tx_right_node = next_node_index
+            next_node_index += 1
+            node_probe_nodes.append(tx_right_node)
+            prev_node = tx_right_node
+        else:
+            rx_nodes.append(RxNode(trunk_node=attach_left_node, node_index=n - 1))
+            node_probe_nodes.append(attach_left_node)
+            prev_node = attach_left_node
+
+    end_node = next_node_index
+    next_node_index += 1
+    tail_length = float(config["length"]) - attach_points[-1] if attach_points else float(config["length"])
+    if tail_length > 0:
+        trunk_segments.append(TrunkSegment(prev_node, end_node, tail_length))
+    else:
+        end_node = prev_node
+
     return Topology(
         trunk_segments=trunk_segments,
-        drop_segments=drop_segments,
-        node_links=node_links,
-        phy_nodes=phy_nodes,
-        tx_phy_node=phy_nodes[tx_node - 1],
-        start_node=trunk_nodes[0],
-        end_node=trunk_nodes[-1],
+        rx_nodes=rx_nodes,
+        node_probe_nodes=node_probe_nodes,
+        tx_left_node=tx_left_node,
+        tx_right_node=tx_right_node,
+        tx_node_index=tx_node - 1,
+        start_node=start_node,
+        end_node=end_node,
         node_count=next_node_index,
     )

@@ -1,9 +1,9 @@
-"""AC-domain solver for building and reducing network matrices."""
+"""AC-domain solver for trunk networks with inline TX and shunt RX models."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List
+from typing import Dict
 import numpy as np
 
 from .topology import Topology
@@ -44,68 +44,59 @@ def _yparams_line(length: float, cable: Dict[str, float], freq: float) -> np.nda
     return np.array([[y11, y12], [y12, y11]], dtype=complex)
 
 
-def run_ac_sim(topology: Topology, cable_model: Dict[str, float], y_s2p: np.ndarray, frequency: np.ndarray, z0: float, rterm: float) -> SimulationResults:
+def _stamp_two_port(y_matrix: np.ndarray, y_params: np.ndarray, node_a: int, node_b: int) -> None:
+    y_matrix[node_a, node_a] += y_params[0, 0]
+    y_matrix[node_a, node_b] += y_params[0, 1]
+    y_matrix[node_b, node_a] += y_params[1, 0]
+    y_matrix[node_b, node_b] += y_params[1, 1]
+
+
+def run_ac_sim(
+    topology: Topology,
+    cable_model: Dict[str, float],
+    rx_shunt_y: np.ndarray,
+    tx_y: np.ndarray,
+    frequency: np.ndarray,
+    z0: float,
+) -> SimulationResults:
     """Run AC simulation across frequency grid and return RL/IL results."""
     node_count = topology.node_count
-    tx_node_index = topology.phy_nodes.index(topology.tx_phy_node)
+    tx_node_index = topology.tx_node_index
+    gmin = 1e-12
     # One Y-matrix per frequency point (complex nodal admittance).
     y_network = np.zeros((len(frequency), node_count, node_count), dtype=complex)
 
     # Stamp trunk segments into the global Y-matrix.
     for seg in topology.trunk_segments:
         for idx, freq in enumerate(frequency):
-            y = _yparams_line(seg.length, cable_model, freq)
-            a = seg.node_a
-            b = seg.node_b
-            y_network[idx, a, a] += y[0, 0]
-            y_network[idx, a, b] += y[0, 1]
-            y_network[idx, b, a] += y[1, 0]
-            y_network[idx, b, b] += y[1, 1]
+            _stamp_two_port(y_network[idx], _yparams_line(seg.length, cable_model, freq), seg.node_a, seg.node_b)
 
-    # Stamp drop segments (trunk -> drop).
-    for drop in topology.drop_segments:
-        for idx, freq in enumerate(frequency):
-            y = _yparams_line(drop.length, cable_model, freq)
-            a = drop.trunk_node
-            b = drop.drop_node
-            y_network[idx, a, a] += y[0, 0]
-            y_network[idx, a, b] += y[0, 1]
-            y_network[idx, b, a] += y[1, 0]
-            y_network[idx, b, b] += y[1, 1]
+    # Stamp inline TX node as a 2-port between the split trunk nodes.
+    for idx in range(len(frequency)):
+        _stamp_two_port(y_network[idx], tx_y[idx], topology.tx_left_node, topology.tx_right_node)
 
-    # Stamp S2P node links (drop -> phy) using S->Y conversion.
-    for link in topology.node_links:
-        for idx in range(len(frequency)):
-            y = y_s2p[idx]
-            a = link.drop_node
-            b = link.phy_node
-            y_network[idx, a, a] += y[0, 0]
-            y_network[idx, a, b] += y[0, 1]
-            y_network[idx, b, a] += y[1, 0]
-            y_network[idx, b, b] += y[1, 1]
+    # Stamp RX nodes as shunt one-ports directly at their trunk attachment.
+    for rx_node in topology.rx_nodes:
+        y_network[:, rx_node.trunk_node, rx_node.trunk_node] += rx_shunt_y
 
-    # Add shunt terminations at the trunk ends.
-    if rterm > 0:
-        y_term = 1.0 / rterm
-        y_network[:, topology.start_node, topology.start_node] += y_term
-        y_network[:, topology.end_node, topology.end_node] += y_term
+    # Keep the reduced nodal system numerically anchored without re-introducing a physical termination.
+    diag = np.arange(node_count)
+    y_network[:, diag, diag] += gmin
 
     # Output arrays for return loss and insertion loss.
     s11_db = np.zeros(len(frequency))
-    s21_db = np.zeros((len(frequency), len(topology.phy_nodes)))
-    gain_db = np.zeros((len(frequency), len(topology.phy_nodes)))
+    s21_db = np.zeros((len(frequency), len(topology.node_probe_nodes)))
+    gain_db = np.zeros((len(frequency), len(topology.node_probe_nodes)))
 
     # Norton source at TX with reference impedance Z0.
     ysrc = 1.0 / z0
     for idx, freq in enumerate(frequency):
-        # Build RHS with matched terminations at every PHY port and excite only the TX port.
+        # Excite the inline TX node from its right-side port.
         y_total = y_network[idx].copy()
         i_vec = np.zeros(node_count, dtype=complex)
+        tx_phy = topology.tx_right_node
 
-        for phy in topology.phy_nodes:
-            y_total[phy, phy] += ysrc
-
-        tx_phy = topology.tx_phy_node
+        y_total[tx_phy, tx_phy] += ysrc
         i_vec[tx_phy] = ysrc
 
         # Solve nodal voltages for this frequency.
@@ -119,17 +110,15 @@ def run_ac_sim(topology: Topology, cable_model: Dict[str, float], y_s2p: np.ndar
         s11 = b1 / a1
         s11_db[idx] = 20 * np.log10(max(np.abs(s11), 1e-30))
 
-        # Evaluate S21 and voltage gain for each non-TX PHY node.
-        for n, phy in enumerate(topology.phy_nodes):
-            if phy == tx_phy:
+        # Evaluate receive voltage relative to the launched TX wave.
+        for n, probe_node in enumerate(topology.node_probe_nodes):
+            if n == tx_node_index:
                 s21_db[idx, n] = np.nan
                 gain_db[idx, n] = np.nan
                 continue
 
-            vend = v[phy]
-            iend = -ysrc * vend
-            b2 = vend - iend * z0
-            s21 = b2 / a1
+            vend = v[probe_node]
+            s21 = vend / a1 if a1 != 0 else 0.0
             gain = vend / vin if vin != 0 else 0.0
             s21_db[idx, n] = 20 * np.log10(max(np.abs(s21), 1e-30))
             gain_db[idx, n] = 20 * np.log10(max(np.abs(gain), 1e-30))
