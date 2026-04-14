@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from pathlib import PurePosixPath
 import re
 from typing import Dict, List
@@ -13,7 +14,7 @@ import numpy as np
 from spmd_reflection.touchstone import TouchstoneData, parse_s2p_text
 
 
-MEASUREMENT_PARAM_MAP: Dict[int, Dict[str, tuple[int, int]]] = {
+LEGACY_MEASUREMENT_PARAM_MAP: Dict[int, Dict[str, tuple[int, int]]] = {
     1: {"S11": (0, 0), "S21": (1, 0)},
     2: {"S22": (0, 0), "S12": (1, 0)},
     3: {"S11": (0, 0), "S31": (1, 0)},
@@ -26,6 +27,36 @@ MEASUREMENT_PARAM_MAP: Dict[int, Dict[str, tuple[int, int]]] = {
     10: {"S33": (0, 0), "S23": (1, 0)},
     11: {"S44": (0, 0), "S14": (1, 0)},
     12: {"S44": (0, 0), "S24": (1, 0)},
+}
+
+JUMPED_MEASUREMENT_PARAM_MAP: Dict[int, Dict[str, tuple[int, int]]] = {
+    1: {"S11": (0, 0), "S31": (1, 0)},
+    2: {"S33": (0, 0), "S13": (1, 0)},
+    3: {"S11": (0, 0), "S21": (1, 0)},
+    4: {"S11": (0, 0), "S41": (1, 0)},
+    5: {"S33": (0, 0), "S23": (1, 0)},
+    6: {"S33": (0, 0), "S43": (1, 0)},
+    7: {"S22": (0, 0), "S42": (1, 0)},
+    8: {"S44": (0, 0), "S24": (1, 0)},
+    9: {"S22": (0, 0), "S12": (1, 0)},
+    10: {"S22": (0, 0), "S32": (1, 0)},
+    11: {"S44": (0, 0), "S14": (1, 0)},
+    12: {"S44": (0, 0), "S34": (1, 0)},
+}
+
+BOARD2_MEASUREMENT_PARAM_MAP: Dict[int, Dict[str, tuple[int, int]]] = {
+    1: {"S11": (0, 0), "S21": (1, 0)},
+    2: {"S11": (0, 0), "S31": (1, 0)},
+    3: {"S11": (0, 0), "S41": (1, 0)},
+    4: {"S22": (0, 0), "S42": (1, 0)},
+    5: {"S22": (0, 0), "S32": (1, 0)},
+    6: {"S22": (0, 0), "S12": (1, 0)},
+    7: {"S33": (0, 0), "S13": (1, 0)},
+    8: {"S33": (0, 0), "S23": (1, 0)},
+    9: {"S33": (0, 0), "S43": (1, 0)},
+    10: {"S44": (0, 0), "S34": (1, 0)},
+    11: {"S44": (0, 0), "S24": (1, 0)},
+    12: {"S44": (0, 0), "S14": (1, 0)},
 }
 
 _MEASUREMENT_FILE_PATTERN = re.compile(r"(?<!\d)(0?[1-9]|1[0-2])(?!\d)")
@@ -44,6 +75,7 @@ class MeasurementTrace:
 class ImportedMeasurementArchive:
     measurements: Dict[int, TouchstoneData]
     traces: Dict[str, List[MeasurementTrace]]
+    mapping_name: str
 
 
 _TRACE_TARGETS: Dict[str, tuple[int, int]] = {
@@ -82,16 +114,72 @@ def _extract_measurement_id(path: str) -> int:
     return matches[0]
 
 
-def load_measurement_archive(zip_path: str) -> ImportedMeasurementArchive:
-    """Load a ZIP archive with the 12 measurement .s2p files."""
+def _normalize_mapping_text(text: str) -> str:
+    return " ".join(text.lower().split())
+
+
+def _select_measurement_param_map(zip_path: str, readme_texts: List[str]) -> tuple[str, Dict[int, Dict[str, tuple[int, int]]]]:
+    zip_name = PurePosixPath(zip_path).name.lower()
+    if "jumped" in zip_name:
+        return "jumped", JUMPED_MEASUREMENT_PARAM_MAP
+
+    combined_readme = "\n".join(readme_texts)
+    if "Ergibt: S11, S31" in combined_readme and "Ergibt: S22, S42" in combined_readme:
+        return "jumped", JUMPED_MEASUREMENT_PARAM_MAP
+
+    normalized_readme = _normalize_mapping_text(combined_readme)
+    if (
+        "messung 2: vna port a → platine port 1 vna port b → platine port 3" in normalized_readme
+        and "messung 4: vna port a → platine port 2 vna port b → platine port 4" in normalized_readme
+        and "messung 10: vna port a → platine port 4 vna port b → platine port 3" in normalized_readme
+    ):
+        return "board2", BOARD2_MEASUREMENT_PARAM_MAP
+
+    return "legacy", LEGACY_MEASUREMENT_PARAM_MAP
+
+
+def _load_measurements_from_directory(directory_path: str) -> tuple[Dict[int, TouchstoneData], Dict[int, str], List[str]]:
     measurements: Dict[int, TouchstoneData] = {}
     source_files: Dict[int, str] = {}
+    readme_texts: List[str] = []
+    base_path = Path(directory_path)
+
+    for member in sorted(path for path in base_path.rglob("*") if path.is_file()):
+        relative_name = member.relative_to(base_path).as_posix()
+        if relative_name.startswith("__MACOSX/") or member.name.startswith("._"):
+            continue
+        if member.name.lower() in {"readme.txt", "readme.md"}:
+            readme_texts.append(member.read_text(encoding="utf-8", errors="replace"))
+            continue
+        if member.suffix.lower() != ".s2p":
+            continue
+
+        measurement_id = _extract_measurement_id(relative_name)
+        if measurement_id in measurements:
+            raise ValueError(
+                f"Duplicate measurement number {measurement_id} in directory: "
+                f"'{source_files[measurement_id]}' and '{relative_name}'."
+            )
+
+        measurements[measurement_id] = parse_s2p_text(member.read_text(encoding="utf-8"))
+        source_files[measurement_id] = relative_name
+
+    return measurements, source_files, readme_texts
+
+
+def _load_measurements_from_zip(zip_path: str) -> tuple[Dict[int, TouchstoneData], Dict[int, str], List[str]]:
+    measurements: Dict[int, TouchstoneData] = {}
+    source_files: Dict[int, str] = {}
+    readme_texts: List[str] = []
 
     with zipfile.ZipFile(zip_path, "r") as archive:
         for member in archive.infolist():
             if member.is_dir():
                 continue
             if "/__MACOSX/" in f"/{member.filename}" or PurePosixPath(member.filename).name.startswith("._"):
+                continue
+            if PurePosixPath(member.filename).name.lower() in {"readme.txt", "readme.md"}:
+                readme_texts.append(archive.read(member).decode("utf-8", errors="replace"))
                 continue
             if not member.filename.lower().endswith(".s2p"):
                 continue
@@ -106,6 +194,16 @@ def load_measurement_archive(zip_path: str) -> ImportedMeasurementArchive:
             text = archive.read(member).decode("utf-8")
             measurements[measurement_id] = parse_s2p_text(text)
             source_files[measurement_id] = member.filename
+
+    return measurements, source_files, readme_texts
+
+
+def load_measurement_archive(zip_path: str) -> ImportedMeasurementArchive:
+    """Load the 12 measurement .s2p files from a ZIP archive or directory."""
+    if Path(zip_path).is_dir():
+        measurements, source_files, readme_texts = _load_measurements_from_directory(zip_path)
+    else:
+        measurements, source_files, readme_texts = _load_measurements_from_zip(zip_path)
 
     missing = [measurement_id for measurement_id in range(1, 13) if measurement_id not in measurements]
     if missing:
@@ -125,9 +223,10 @@ def load_measurement_archive(zip_path: str) -> ImportedMeasurementArchive:
                 f"Measurement {measurement_id} does not match the frequency grid of measurement 1."
             )
 
+    mapping_name, measurement_param_map = _select_measurement_param_map(zip_path, readme_texts)
     traces: Dict[str, List[MeasurementTrace]] = {}
     for measurement_id, touchstone in measurements.items():
-        for param_name, (row, col) in MEASUREMENT_PARAM_MAP[measurement_id].items():
+        for param_name, (row, col) in measurement_param_map[measurement_id].items():
             traces.setdefault(param_name, []).append(
                 MeasurementTrace(
                     name=param_name,
@@ -138,7 +237,11 @@ def load_measurement_archive(zip_path: str) -> ImportedMeasurementArchive:
                 )
             )
 
-    return ImportedMeasurementArchive(measurements=measurements, traces=traces)
+    return ImportedMeasurementArchive(
+        measurements=measurements,
+        traces=traces,
+        mapping_name=mapping_name,
+    )
 
 
 def build_single_ended_4port(archive: ImportedMeasurementArchive) -> TouchstoneData:
