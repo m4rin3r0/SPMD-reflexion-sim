@@ -1,17 +1,14 @@
 """Import helpers for reconstructing node data from measurement archives."""
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 from pathlib import PurePosixPath
 import re
 from typing import Dict, List
 import zipfile
-
 import numpy as np
-
-from spmd_reflection.touchstone import TouchstoneData, parse_s2p_text
+from spmd_reflection.touchstone_parser.touchstone import TouchstoneData, parse_s2p_text
 
 
 LEGACY_MEASUREMENT_PARAM_MAP: Dict[int, Dict[str, tuple[int, int]]] = {
@@ -266,7 +263,8 @@ def build_single_ended_4port(archive: ImportedMeasurementArchive) -> TouchstoneD
 def convert_single_ended_to_differential(data: TouchstoneData) -> TouchstoneData:
     """Convert a 4-port single-ended S-matrix to a 2-port differential S-matrix.
 
-    Ports are paired as (1, 2) and (3, 4).
+    Ports are paired as (1, 2) and (3, 4), preserving that side ordering in the
+    resulting differential 2-port.
     """
     if data.s_params.ndim != 3 or data.s_params.shape[1:] != (4, 4):
         raise ValueError("Expected a 4-port single-ended S-matrix for conversion.")

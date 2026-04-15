@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 
-DEFAULTS: Dict[str, Any] = {
+DEFAULTS:Dict[str, Any] = {
     "analysis": "ac",
     "freq_start": 1e5,
     "freq_stop": 4e7,
@@ -33,7 +33,7 @@ DEFAULTS: Dict[str, Any] = {
 
 @dataclass
 class Config:
-    data: Dict[str, Any] = field(default_factory=dict)
+    data:Dict[str, Any] = field(default_factory=dict)
 
     @property
     def freq_start(self) -> float:
@@ -52,7 +52,7 @@ class Config:
         return float(self.data["z0"])
 
 
-def _deep_update(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+def _deep_update(base:Dict[str, Any], updates:Dict[str, Any]) -> Dict[str, Any]:
     for key, value in updates.items():
         if isinstance(value, dict) and isinstance(base.get(key), dict):
             base[key] = _deep_update(dict(base[key]), value)
@@ -61,7 +61,7 @@ def _deep_update(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any
     return base
 
 
-def load_config(json_path: Optional[str], overrides: Optional[Dict[str, Any]] = None) -> Config:
+def load_config(json_path:Optional[str], overrides:Optional[Dict[str, Any]] = None) -> Config:
     data = dict(DEFAULTS)
     if json_path:
         with open(json_path, "r") as handle:
@@ -74,7 +74,7 @@ def load_config(json_path: Optional[str], overrides: Optional[Dict[str, Any]] = 
     return Config(data=data)
 
 
-def _validate(data: Dict[str, Any]) -> None:
+def _validate(data:Dict[str, Any]) -> None:
     if data["analysis"] != "ac":
         raise ValueError("Only 'ac' analysis is supported in v0.")
     if data["freq_start"] <= 0 or data["freq_stop"] <= 0:

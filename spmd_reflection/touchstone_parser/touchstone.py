@@ -10,12 +10,12 @@ import numpy as np
 
 @dataclass
 class TouchstoneData:
-    frequency: np.ndarray
-    s_params: np.ndarray
-    z0: float
+    frequency:np.ndarray
+    s_params:np.ndarray
+    z0:float
 
 
-def _unit_scale(token: str) -> float:
+def _unit_scale(token:str) -> float:
     token = token.lower()
     if token == "hz":
         return 1.0
@@ -28,17 +28,17 @@ def _unit_scale(token: str) -> float:
     raise ValueError(f"Unsupported frequency unit: {token}")
 
 
-def _parse_format(token: str) -> str:
+def _parse_format(token:str) -> str:
     """ Touchstone S2P format line: "# <freq_unit> S <data_format> R <z0>"
-        data_format: RI (real/imag), MA (mag/angle), or DB (dB/angle)."""
+        data_format:RI (real/imag), MA (mag/angle), or DB (dB/angle)."""
     token = token.lower()
     if token in {"ri", "ma", "db"}:
         return token
     raise ValueError(f"Unsupported data format: {token}")
 
-def _to_complex(format: str, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+def _to_complex(format:str, a:np.ndarray, b:np.ndarray) -> np.ndarray:
     """ Convert (a,b) values into complex S-parameters based on the format:
-        RI: a=real, b=imag; MA: a=mag, b=angle deg; DB: a=dB, b=angle deg."""
+        RI:a=real, b=imag; MA:a=mag, b=angle deg; DB:a=dB, b=angle deg."""
     if format == "ri":
         return a + 1j * b
     if format == "ma":
@@ -49,14 +49,14 @@ def _to_complex(format: str, a: np.ndarray, b: np.ndarray) -> np.ndarray:
     raise ValueError("Unsupported format")
 
 
-def _parse_s2p_lines(lines: List[str]) -> TouchstoneData:
+def _parse_s2p_lines(lines:List[str]) -> TouchstoneData:
     """Parse Touchstone .s2p content from a list of text lines."""
     freq_unit = "hz"
     data_format = "ri"
     z0 = 50.0
 
-    frequencies: List[float] = []
-    values: List[float] = []
+    frequencies:List[float] = []
+    values:List[float] = []
 
     for line in lines:
         line = line.strip()
@@ -109,18 +109,18 @@ def _parse_s2p_lines(lines: List[str]) -> TouchstoneData:
     return TouchstoneData(frequency=freq_arr, s_params=s_params, z0=float(z0))
 
 
-def parse_s2p(path: str) -> TouchstoneData:
+def parse_s2p(path:str) -> TouchstoneData:
     """Parse a Touchstone .s2p file into frequency, S-parameter matrix, and Z0."""
     with open(path, "r", encoding="utf-8") as handle:
         return _parse_s2p_lines(handle.readlines())
 
 
-def parse_s2p_text(text: str) -> TouchstoneData:
+def parse_s2p_text(text:str) -> TouchstoneData:
     """Parse Touchstone .s2p content from an in-memory text string."""
     return _parse_s2p_lines(text.splitlines())
 
 
-def write_s2p(path: str, data: TouchstoneData, freq_unit: str = "Hz") -> None:
+def write_s2p(path:str, data:TouchstoneData, freq_unit:str = "Hz") -> None:
     """Write a 2-port Touchstone file in RI format."""
     if data.s_params.ndim != 3 or data.s_params.shape[1:] != (2, 2):
         raise ValueError("write_s2p expects a 2-port TouchstoneData object.")
@@ -143,8 +143,7 @@ def write_s2p(path: str, data: TouchstoneData, freq_unit: str = "Hz") -> None:
                 f"{s[1, 1].real:.12g} {s[1, 1].imag:.12g}\n"
             )
 
-
-def s_to_y(s_params: np.ndarray, z0: float) -> np.ndarray:
+def s_to_y(s_params:np.ndarray, z0:float) -> np.ndarray:
     """Convert S-parameters to Y-parameters for a 2-port with scalar Z0."""
     identity = np.eye(2, dtype=complex)
     y_params = []
@@ -156,14 +155,14 @@ def s_to_y(s_params: np.ndarray, z0: float) -> np.ndarray:
     return np.array(y_params)
 
 
-def s11_to_y(s11: np.ndarray, z0: float) -> np.ndarray:
+def s11_to_y(s11:np.ndarray, z0:float) -> np.ndarray:
     """Convert one-port S11 data to shunt admittance."""
     denom = 1.0 + s11
     denom = np.where(np.abs(denom) < 1e-30, 1e-30 + 0j, denom)
     return (1.0 - s11) / denom / z0
 
 
-def interpolate_s_params(data: TouchstoneData, target_freq: np.ndarray) -> np.ndarray:
+def interpolate_s_params(data:TouchstoneData, target_freq:np.ndarray) -> np.ndarray:
     """Interpolate S-parameters to target frequencies (linear on real/imag)."""
     s_interp = np.zeros((len(target_freq), 2, 2), dtype=complex) # empty 2x2 matrix for each freq
     for i in range(2):

@@ -4,6 +4,14 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import numpy as np
+
+from spmd_reflection.config import load_config
+from spmd_reflection.topology import build_topology
+from spmd_reflection.touchstone_parser.touchstone import interpolate_s_params, parse_s2p, s11_to_y, s_to_y, write_s2p
+from spmd_reflection.solver_ac import run_ac_sim
+from spmd_reflection.plots import plot_results
+from spmd_reflection.touchstone_parser.touchstone_wrapper import build_differential_s_params
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,24 +38,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--nodes", type=int, default=None)
     parser.add_argument("--length", type=float, default=None)
     parser.add_argument("--tx_node", type=int, default=None)
-    parser.add_argument(
-        "--export-s2p",
-        type=str,
-        default=None,
-        help="Optional output path for the differential RX drop S2P generated from --s2p-zip",
-    )
-    parser.add_argument(
-        "--export-jumped-s2p",
-        type=str,
-        default=None,
-        help="Optional output path for the differential TX jumped S2P generated from --jumped-s2p-zip",
-    )
-    parser.add_argument(
-        "--plot-repeated",
-        type=str,
-        default=None,
-        help="Optional output path for a comparison plot of repeated single-ended S-parameter measurements from --s2p-zip",
-    )
     parser.add_argument("--plot", type=str, default=None, help="Save plot to file")
     return parser
 
@@ -57,27 +47,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    import numpy as np
-
-    from spmd_reflection.config import load_config
-    from spmd_reflection.measurement_import import (
-        build_single_ended_4port,
-        convert_single_ended_to_differential,
-        load_measurement_archive,
-    )
-    from spmd_reflection.topology import build_topology
-    from spmd_reflection.touchstone import (
-        interpolate_s_params,
-        parse_s2p,
-        s11_to_y,
-        s_to_y,
-        write_s2p,
-    )
-    from spmd_reflection.solver_ac import run_ac_sim
-    from spmd_reflection.plots import plot_repeated_measurement_traces, plot_results
-
     args = _parse_args()
-
     overrides = {}
     if args.s2p:
         overrides["s2p"] = args.s2p
@@ -105,32 +75,14 @@ def main() -> None:
     config = load_config(args.json, overrides)
 
     if config.data.get("s2p_zip"):
-        archive = load_measurement_archive(config.data["s2p_zip"])
-        if args.plot_repeated:
-            plot_repeated_measurement_traces(archive, output_path=args.plot_repeated)
-            print(f"Exported repeated-trace comparison plot to: {args.plot_repeated}")
-
-        single_ended = build_single_ended_4port(archive)
-        rx_touchstone = convert_single_ended_to_differential(single_ended)
-        export_path = args.export_s2p
-        if export_path is None:
-            zip_path = Path(config.data["s2p_zip"])
-            export_path = str(zip_path.with_name(f"{zip_path.stem}_differential.s2p"))
-        write_s2p(export_path, rx_touchstone)
-        print(f"Exported differential S2P to: {export_path}")
+        file_path = config.data["s2p_zip"]
+        rx_touchstone = build_differential_s_params(file_path)
     else:
         rx_touchstone = parse_s2p(config.data["s2p"])
 
     if config.data.get("jumped_s2p_zip"):
-        jumped_archive = load_measurement_archive(config.data["jumped_s2p_zip"])
-        jumped_single_ended = build_single_ended_4port(jumped_archive)
-        tx_touchstone = convert_single_ended_to_differential(jumped_single_ended)
-        export_jumped_path = args.export_jumped_s2p
-        if export_jumped_path is None:
-            zip_path = Path(config.data["jumped_s2p_zip"])
-            export_jumped_path = str(zip_path.with_name(f"{zip_path.stem}_differential.s2p"))
-        write_s2p(export_jumped_path, tx_touchstone)
-        print(f"Exported jumped differential S2P to: {export_jumped_path}")
+        file_path = config.data["jumped_s2p_zip"]
+        tx_touchstone = build_differential_s_params(file_path)
     else:
         tx_touchstone = parse_s2p(config.data["jumped_s2p"])
 
