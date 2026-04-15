@@ -31,16 +31,6 @@ To save plots:
 python cli.py --json examples/basic.json --s2p /path/to/rx_drop.s2p --jumped-s2p /path/to/tx_jumped.s2p --plot results.png
 ```
 
-GUI launcher:
-```bash
-python gui.py
-```
-
-Or after editable install:
-```bash
-spmd-reflection-sim-gui
-```
-
 ## Configuration
 See `examples/basic.json` for the minimal schema. The fields `s2p` and `jumped_s2p` are required.
 

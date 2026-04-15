@@ -18,7 +18,6 @@ dependencies = [
 
 [project.scripts]
 spmd-reflection-sim = "cli:main"
-spmd-reflection-sim-gui = "gui:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
