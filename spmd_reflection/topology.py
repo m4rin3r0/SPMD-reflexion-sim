@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
-import random
+from typing import List
 
 
 @dataclass
@@ -33,95 +32,36 @@ class Topology:
     node_count: int
 
 
-class Trunk:
-    def __init__(
-        self,
-        length: float,
-        nodes: int,
-        separation_min: float,
-        start_pad: float,
-        end_pad: float,
-        start_attach: int,
-        end_attach: int,
-        attach_error: float,
-        attach_points: Optional[List[float]],
-    ) -> None:
-        self.length = float(length)
-        self.nodes = int(nodes)
-        self.separation_min = float(separation_min)
-        self.start_pad = float(start_pad)
-        self.end_pad = float(end_pad)
-        self.start_attach = int(start_attach)
-        self.end_attach = int(end_attach)
-        self.attach_error = float(attach_error)
-        self.attach_points = self._build_attach_points(attach_points)
+def _validate_attach_points(config: dict) -> List[float]:
+    attach_points_raw = config.get("attach_points")
+    if attach_points_raw is None:
+        raise ValueError("'attach_points' is required and must be a list of positions.")
+    if not isinstance(attach_points_raw, list):
+        raise ValueError("'attach_points' must be a list of positions.")
 
-    def _build_attach_points(self, attach_points: Optional[List[float]]) -> List[float]:
-        if attach_points is not None:
-            return sorted(float(x) for x in attach_points)
+    attach_points = [float(point) for point in attach_points_raw]
+    expected_count = int(config["nodes"])
+    if len(attach_points) != expected_count:
+        raise ValueError(
+            f"'attach_points' must contain exactly {expected_count} values, got {len(attach_points)}."
+        )
 
-        unattached = self.nodes
-        attach_start = self.start_pad
-        attach_end = self.length - self.end_pad
-        points: List[float] = []
+    length = float(config["length"])
+    for idx, point in enumerate(attach_points, start=1):
+        if point < 0.0 or point > length:
+            raise ValueError(
+                f"attach_points[{idx}]={point} is outside the valid range [0, {length}]."
+            )
 
-        if self.end_attach > 0:
-            end_pts = self._end_attach(attach_end, self.end_attach)
-            points.extend(end_pts)
-            unattached -= self.end_attach
-            attach_end = end_pts[0] - self.separation_min
+    for idx in range(1, len(attach_points)):
+        if attach_points[idx] < attach_points[idx - 1]:
+            raise ValueError("'attach_points' must be sorted in non-decreasing order.")
 
-        if self.start_attach > 0:
-            start_pts = self._start_attach(attach_start, self.start_attach)
-            points.extend(start_pts)
-            unattached -= self.start_attach
-            attach_start = start_pts[-1] + self.separation_min
-
-        mid_pts: List[float]
-        if unattached <= 0:
-            mid_pts = []
-        else:
-            mid_pts = self._distribute_even(attach_start, attach_end, unattached)
-
-        points.extend(mid_pts)
-        return sorted(points)
-
-    def _distribute_even(self, start: float, end: float, count: int) -> List[float]:
-        if count <= 0:
-            return []
-        if count == 1:
-            return [(start + end) / 2]
-        delta = (end - start) / (count - 1)
-        points = []
-        for i in range(count):
-            pt = start + i * delta + random.gauss(0, self.attach_error)
-            pt = min(max(pt, 0.0), self.length)
-            points.append(pt)
-        return points
-
-    def _start_attach(self, start: float, count: int) -> List[float]:
-        return [start + i * self.separation_min for i in range(count)]
-
-    def _end_attach(self, end: float, count: int) -> List[float]:
-        return [end - ((count - i - 1) * self.separation_min) for i in range(count)]
+    return attach_points
 
 
 def build_topology(config: dict) -> Topology:
-    trunk = Trunk(
-        length=config["length"],
-        nodes=config["nodes"],
-        separation_min=config["separation_min"],
-        start_pad=config["start_pad"],
-        end_pad=config["end_pad"],
-        start_attach=config["start_attach"],
-        end_attach=config["end_attach"],
-        attach_error=config.get("attach_error", 0.0),
-        attach_points=config.get("attach_points"),
-    )
-
-    attach_points = trunk.attach_points
-    if len(attach_points) != config["nodes"]:
-        raise ValueError("attach_points count must match nodes")
+    attach_points = _validate_attach_points(config)
 
     tx_node = int(config.get("tx_node", 1))
     if tx_node < 1 or tx_node > config["nodes"]:

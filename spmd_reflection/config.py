@@ -15,13 +15,7 @@ DEFAULTS: Dict[str, Any] = {
     "z0": 100.0,
     "nodes": 16,
     "length": 100.0,
-    "attach_points": None,
-    "separation_min": 1.0,
-    "start_pad": 0.0,
-    "end_pad": 0.0,
-    "start_attach": 0,
-    "end_attach": 0,
-    "attach_error": 0.0,
+    "attach_points": [],
     "tx_node": 1,
     "s2p": None,
     "s2p_zip": None,
@@ -89,6 +83,10 @@ def _validate(data: Dict[str, Any]) -> None:
         raise ValueError("freq_stop must be greater than freq_start.")
     if data["npoints"] < 2:
         raise ValueError("npoints must be >= 2.")
+    if not isinstance(data.get("attach_points"), list):
+        raise ValueError("'attach_points' must be provided as a list.")
+    if len(data["attach_points"]) != int(data["nodes"]):
+        raise ValueError("'attach_points' length must match 'nodes'.")
     if data.get("s2p") and data.get("s2p_zip"):
         raise ValueError("Provide either 's2p' or 's2p_zip', not both.")
     if not data.get("s2p") and not data.get("s2p_zip"):

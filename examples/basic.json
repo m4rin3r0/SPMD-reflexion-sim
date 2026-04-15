@@ -6,7 +6,7 @@
   "z0": 100,
   "nodes": 4,
   "length": 7,
-  "attach_points": null,
+  "attach_points": [1.0, 3.0, 5.0, 7.0],
   "s2p": "examples/LiteVNA_meas_board2_differential.s2p",
   "jumped_s2p": "examples/LiteVNA_meas_board2_jumped_differential.s2p",
   "cable_model": {

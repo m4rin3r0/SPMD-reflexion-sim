@@ -16,7 +16,7 @@
    - Validate required fields.
    - Produce canonical config.
 3) `topology.py`
-   - Build trunk plus inline/shunt node placements.
+   - Build trunk plus inline/shunt node placements from explicit `attach_points`.
    - Provide node/port indices for solver.
 4) `touchstone.py`
    - Parse S2P (frequency, S-matrix, Z0).
@@ -59,7 +59,7 @@
   "z0": 100,
   "nodes": 16,
   "length": 100,
-  "attach_points": null,
+  "attach_points": [0, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 92, 96, 98, 100],
   "s2p": "path/to/rx_drop.s2p",
   "jumped_s2p": "path/to/tx_jumped.s2p",
   "cable_model": {
@@ -76,4 +76,3 @@
 - S2P format and Z0 need validation with real files.
 - Mixed-mode vs single-ended conventions may require mapping.
 - S21 normalization must be validated against a known reference.
-

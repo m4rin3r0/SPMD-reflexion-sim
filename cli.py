@@ -29,11 +29,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--z0", type=float, default=None)
     parser.add_argument("--nodes", type=int, default=None)
     parser.add_argument("--length", type=float, default=None)
-    parser.add_argument("--separation_min", type=float, default=None)
-    parser.add_argument("--start_pad", type=float, default=None)
-    parser.add_argument("--end_pad", type=float, default=None)
-    parser.add_argument("--start_attach", type=int, default=None)
-    parser.add_argument("--end_attach", type=int, default=None)
     parser.add_argument("--tx_node", type=int, default=None)
     parser.add_argument(
         "--export-s2p",
@@ -104,16 +99,6 @@ def main() -> None:
         overrides["nodes"] = args.nodes
     if args.length is not None:
         overrides["length"] = args.length
-    if args.separation_min is not None:
-        overrides["separation_min"] = args.separation_min
-    if args.start_pad is not None:
-        overrides["start_pad"] = args.start_pad
-    if args.end_pad is not None:
-        overrides["end_pad"] = args.end_pad
-    if args.start_attach is not None:
-        overrides["start_attach"] = args.start_attach
-    if args.end_attach is not None:
-        overrides["end_attach"] = args.end_attach
     if args.tx_node is not None:
         overrides["tx_node"] = args.tx_node
 
