@@ -11,14 +11,14 @@ from .topology import Topology
 
 @dataclass
 class SimulationResults:
-    frequency: np.ndarray
-    s11_db: np.ndarray
-    gain_db: np.ndarray
-    s21_db: np.ndarray
-    tx_node_index: int
+    frequency:np.ndarray
+    s11_db:np.ndarray
+    gain_db:np.ndarray
+    s21_db:np.ndarray
+    tx_node_index:int
 
 
-def _yparams_line(length: float, cable: Dict[str, float], freq: float) -> np.ndarray:
+def _yparams_line(length:float, cable:Dict[str, float], freq:float) -> np.ndarray:
     """Return a 2-port Y-parameter matrix for a cable segment at one frequency."""
     rdc = cable["rdc"]
     rskin = cable["rskin"]
@@ -44,24 +44,22 @@ def _yparams_line(length: float, cable: Dict[str, float], freq: float) -> np.nda
     return np.array([[y11, y12], [y12, y11]], dtype=complex)
 
 
-def _stamp_two_port(y_matrix: np.ndarray, y_params: np.ndarray, node_a: int, node_b: int) -> None:
+def _stamp_two_port(y_matrix:np.ndarray, y_params:np.ndarray, node_a:int, node_b:int) -> None:
     y_matrix[node_a, node_a] += y_params[0, 0]
     y_matrix[node_a, node_b] += y_params[0, 1]
     y_matrix[node_b, node_a] += y_params[1, 0]
     y_matrix[node_b, node_b] += y_params[1, 1]
 
 
-def run_ac_sim(
-    topology: Topology,
-    cable_model: Dict[str, float],
-    rx_shunt_y: np.ndarray,
-    tx_y: np.ndarray,
-    frequency: np.ndarray,
-    z0: float,
-) -> SimulationResults:
+def _stamp_shunt_termination(y_network:np.ndarray, node:int, z0:float) -> None:
+    y_network[:, node, node] += 1.0 / z0
+
+
+def run_ac_sim(topology:Topology, cable_model:Dict[str, float], rx_shunt_y:np.ndarray, tx_y:np.ndarray, frequency:np.ndarray, z0:float) -> SimulationResults:
     """Run AC simulation across frequency grid and return RL/IL results."""
     node_count = topology.node_count
-    tx_node_index = topology.tx_node_index
+    tx_node = topology.tx_node
+    tx_node_index = tx_node.tx_node_index
     gmin = 1e-12
     # One Y-matrix per frequency point (complex nodal admittance).
     y_network = np.zeros((len(frequency), node_count, node_count), dtype=complex)
@@ -71,13 +69,17 @@ def run_ac_sim(
         for idx, freq in enumerate(frequency):
             _stamp_two_port(y_network[idx], _yparams_line(seg.length, cable_model, freq), seg.node_a, seg.node_b)
 
-    # Stamp inline TX node as a 2-port between the split trunk nodes.
+    # Stamp the TX 2-port so Touchstone/Y-matrix port 1 sits on the PHY/source side.
     for idx in range(len(frequency)):
-        _stamp_two_port(y_network[idx], tx_y[idx], topology.tx_left_node, topology.tx_right_node)
+        _stamp_two_port(y_network[idx], tx_y[idx], tx_node.tx_phy_node, tx_node.tx_trunk_node)
 
     # Stamp RX nodes as shunt one-ports directly at their trunk attachment.
     for rx_node in topology.rx_nodes:
         y_network[:, rx_node.trunk_node, rx_node.trunk_node] += rx_shunt_y
+
+    # Terminate the bus with Z0 at both ends.
+    for terminal_node in {topology.get_start_node(), topology.get_end_node()}:
+        _stamp_shunt_termination(y_network, terminal_node, z0)
 
     # Keep the reduced nodal system numerically anchored without re-introducing a physical termination.
     diag = np.arange(node_count)
@@ -91,10 +93,10 @@ def run_ac_sim(
     # Norton source at TX with reference impedance Z0.
     ysrc = 1.0 / z0
     for idx, freq in enumerate(frequency):
-        # Excite the inline TX node from its right-side port.
+        # Excite TX port 1 on the PHY side with the Norton source.
         y_total = y_network[idx].copy()
         i_vec = np.zeros(node_count, dtype=complex)
-        tx_phy = topology.tx_right_node
+        tx_phy = tx_node.tx_phy_node
 
         y_total[tx_phy, tx_phy] += ysrc
         i_vec[tx_phy] = ysrc
