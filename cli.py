@@ -29,13 +29,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--z0", type=float, default=None)
     parser.add_argument("--nodes", type=int, default=None)
     parser.add_argument("--length", type=float, default=None)
-    parser.add_argument("--random_attach", action="store_true")
     parser.add_argument("--separation_min", type=float, default=None)
     parser.add_argument("--start_pad", type=float, default=None)
     parser.add_argument("--end_pad", type=float, default=None)
     parser.add_argument("--start_attach", type=int, default=None)
     parser.add_argument("--end_attach", type=int, default=None)
-    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--tx_node", type=int, default=None)
     parser.add_argument(
         "--export-s2p",
@@ -106,8 +104,6 @@ def main() -> None:
         overrides["nodes"] = args.nodes
     if args.length is not None:
         overrides["length"] = args.length
-    if args.random_attach:
-        overrides["random_attach"] = True
     if args.separation_min is not None:
         overrides["separation_min"] = args.separation_min
     if args.start_pad is not None:
@@ -118,8 +114,6 @@ def main() -> None:
         overrides["start_attach"] = args.start_attach
     if args.end_attach is not None:
         overrides["end_attach"] = args.end_attach
-    if args.seed is not None:
-        overrides["seed"] = args.seed
     if args.tx_node is not None:
         overrides["tx_node"] = args.tx_node
 
@@ -160,7 +154,9 @@ def main() -> None:
 
     rx_interp = interpolate_s_params(rx_touchstone, freq)
     tx_interp = interpolate_s_params(tx_touchstone, freq)
-    rx_shunt_y = s11_to_y(rx_interp[:, 0, 0], rx_touchstone.z0)
+    # RX stubs are reduced to a 1-port shunt seen from differential port 2,
+    # the receive side connected to the trunk.
+    rx_shunt_y = s11_to_y(rx_interp[:, 1, 1], rx_touchstone.z0)
     tx_y = s_to_y(tx_interp, tx_touchstone.z0)
 
     results = run_ac_sim(

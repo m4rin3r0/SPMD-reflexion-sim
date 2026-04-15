@@ -43,7 +43,6 @@ class Trunk:
         end_pad: float,
         start_attach: int,
         end_attach: int,
-        random_attach: bool,
         attach_error: float,
         attach_points: Optional[List[float]],
     ) -> None:
@@ -54,7 +53,6 @@ class Trunk:
         self.end_pad = float(end_pad)
         self.start_attach = int(start_attach)
         self.end_attach = int(end_attach)
-        self.random_attach = bool(random_attach)
         self.attach_error = float(attach_error)
         self.attach_points = self._build_attach_points(attach_points)
 
@@ -82,8 +80,6 @@ class Trunk:
         mid_pts: List[float]
         if unattached <= 0:
             mid_pts = []
-        elif self.random_attach:
-            mid_pts = self._distribute_random(attach_start, attach_end, unattached)
         else:
             mid_pts = self._distribute_even(attach_start, attach_end, unattached)
 
@@ -103,27 +99,6 @@ class Trunk:
             points.append(pt)
         return points
 
-    def _distribute_random(self, start: float, end: float, count: int) -> List[float]:
-        available = (end - start) + (2 * self.separation_min)
-        if available <= 0:
-            return []
-        segments = [available]
-        for _ in range(count):
-            idx = random.randrange(len(segments))
-            length = segments.pop(idx)
-            if length <= self.separation_min * 2:
-                segments.insert(idx, length)
-                break
-            div = random.uniform(self.separation_min, length - self.separation_min)
-            segments.insert(idx, div)
-            segments.insert(idx + 1, length - div)
-        positions = []
-        pos = start
-        for seg in segments[:-1]:
-            pos += seg
-            positions.append(pos)
-        return positions
-
     def _start_attach(self, start: float, count: int) -> List[float]:
         return [start + i * self.separation_min for i in range(count)]
 
@@ -132,10 +107,6 @@ class Trunk:
 
 
 def build_topology(config: dict) -> Topology:
-    seed = int(config.get("seed", -1))
-    if seed != -1:
-        random.seed(seed)
-
     trunk = Trunk(
         length=config["length"],
         nodes=config["nodes"],
@@ -144,7 +115,6 @@ def build_topology(config: dict) -> Topology:
         end_pad=config["end_pad"],
         start_attach=config["start_attach"],
         end_attach=config["end_attach"],
-        random_attach=config["random_attach"],
         attach_error=config.get("attach_error", 0.0),
         attach_points=config.get("attach_points"),
     )
