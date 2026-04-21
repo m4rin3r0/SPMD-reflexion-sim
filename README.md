@@ -37,3 +37,6 @@ See `examples/basic.json` for the minimal schema. The fields `s2p` and `jumped_s
 ## Notes
 This solver treats the RX drop measurement as a one-port load using its differential `S11`.
 The TX node is modeled as an inline differential two-port from the jumped measurement.
+In addition to the global bus `S11`/`S21`, the plots include a local RL/IL evaluation for every RX drop on the mixing segment:
+solid lines use the left side of the branch, dashed lines use the right side.
+The RL plots also overlay the 10BASE-T1M compliance limit, using `N_UNIT = nodes`.

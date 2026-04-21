@@ -2,13 +2,11 @@
   "analysis": "ac",
   "freq_start": 1e5,
   "freq_stop": 4e7,
-  "npoints": 101,
-  "z0": 100e9,
-  "nodes": 1,
-  "length": 0,
-  "attach_points": [
-    0
-  ],
+  "npoints": 400,
+  "z0": 100,
+  "nodes": 4,
+  "length": 7,
+  "attach_points": [1.0, 3.0, 5.0, 7.0],
   "tx_node": 1,
   "s2p": "examples/LiteVNA_meas_board2_differential.s2p",
   "jumped_s2p": "examples/LiteVNA_meas_board2_jumped_differential.s2p",

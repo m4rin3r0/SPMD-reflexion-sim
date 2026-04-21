@@ -105,7 +105,7 @@ def main() -> None:
         z0=config.z0,
     )
 
-    plot_results(results, output_path=args.plot)
+    plot_results(results, output_path=args.plot, rl_n_unit=int(config.data["nodes"]))
 
 
 if __name__ == "__main__":

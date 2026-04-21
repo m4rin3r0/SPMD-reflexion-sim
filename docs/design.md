@@ -25,9 +25,10 @@
 5) `solver_ac.py`
    - Stamp all elements into a Y matrix per frequency.
    - Solve MNA system.
-   - Compute S11/S21.
+   - Compute global S11/S21 and local drop RL/IL on both sides of each branch.
 6) `plots.py`
    - RL/IL plots (dB vs f).
+   - Overlay 10BASE-T1M RL compliance limit on RL plots.
    - Optional CSV export.
 
 ## Modeling Assumptions (v0)
@@ -41,6 +42,7 @@
 - Stamp RX nodes as shunt one-port admittances at the trunk attachment points.
 - Use a Norton source with reference impedance `Z0` at the TX port.
 - Derive S11/S21 from solved port voltages and currents.
+- Derive per-drop mixing-segment waves from the adjacent trunk segments and evaluate RL/IL on the left and right side of each branch.
 
 ## Cable Model (v0)
 - Series impedance per meter:

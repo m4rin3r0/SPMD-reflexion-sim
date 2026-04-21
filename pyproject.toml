@@ -14,7 +14,8 @@ authors = [
 dependencies = [
   "numpy",
   "matplotlib",
-]
+  "pytest>=7.0",
+  ]
 
 [project.scripts]
 spmd-reflection-sim = "cli:main"
@@ -22,3 +23,6 @@ spmd-reflection-sim = "cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["spmd_reflection*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
