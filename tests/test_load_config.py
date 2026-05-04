@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from spmd_reflection.config.load import load_config
-from spmd_reflection.config.models import FrequencyGrid, SimConfig, TopologyConfig, TouchstonePaths
+from spmd_reflection.config.models import FrequencyGrid, SimConfig, TopologyConfig
 
 
 """Table of content:
@@ -30,12 +30,12 @@ def _make_dummy_touchstone(path: Path) -> None:
     path.write_text("# Hz S RI R 100\n")
 
 
-def _valid_config_dict(tx_filename:str="tx.s2p", rx_filename:str="rx.s2p") -> dict[str,Any]:
-    """Return a config dict with all required sections, ready for testing."""
+def _valid_config_dict(touchstone_filename:str="drop.s2p") -> dict:
+    """Produce a valid config dict for testing."""
     return {
         "frequency": {
-            "start_hz": 300_000,
-            "stop_hz": 40_000_000,
+            "start_hz": 300_000.0,
+            "stop_hz": 40_000_000.0,
             "n_points": 1001,
         },
         "topology": {
@@ -45,9 +45,9 @@ def _valid_config_dict(tx_filename:str="tx.s2p", rx_filename:str="rx.s2p") -> di
             "tx_drop_index": 0,
             "termination_ohm": 100.0,
         },
-        "paths": {
-            "tx_touchstone": tx_filename,
-            "rx_touchstone": rx_filename,
+        "drop": {
+            "touchstone": touchstone_filename,
+            "phy_load_ohm": 20000.0,
         },
         "cable": {
             "l_per_m": 413e-9,
@@ -58,16 +58,14 @@ def _valid_config_dict(tx_filename:str="tx.s2p", rx_filename:str="rx.s2p") -> di
     }
 
 
-def _write_config(tmp_path:Path, content:dict[str,Any]) -> Path:
-    """Write a config dict to a YAML file in tmp_path. Also creates dummy touchstone files."""
+def _write_config(tmp_path:Path, config_dict:dict) -> Path:
+    """Write a config dict to YAML and create dummy touchstone file."""
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(yaml.safe_dump(content))
-    # Also create the touchstone files referenced by the config, if any.
-    if "paths" in content:
-        if "tx_touchstone" in content["paths"]:
-            _make_dummy_touchstone(tmp_path / content["paths"]["tx_touchstone"])
-        if "rx_touchstone" in content["paths"]:
-            _make_dummy_touchstone(tmp_path / content["paths"]["rx_touchstone"])
+    config_path.write_text(yaml.safe_dump(config_dict)) 
+    # Create the touchstone file referenced in the config.
+    if "drop" in config_dict and "touchstone" in config_dict["drop"]:
+        ts_filename = config_dict["drop"]["touchstone"]
+        _make_dummy_touchstone(tmp_path / ts_filename) 
     return config_path
 
 
@@ -76,22 +74,22 @@ def test_loads_complete_valid_config(tmp_path):
     config_dict = _valid_config_dict()
     config_path = _write_config(tmp_path, config_dict)
     config = load_config(config_path)
-
+    # Frequency section.
     assert config.frequency == FrequencyGrid(
         start_hz=300_000.0,
         stop_hz=40_000_000.0,
         n_points=1001)
-    
+    # Topology section.
     assert config.topology == TopologyConfig(
         drop_positions_m=(1.0, 3.0, 5.0),
         bus_start_m=0.0,
         bus_end_m=7.0,
         tx_drop_index=0,
         termination_ohm=100.0)
-
-    assert config.paths.tx == (tmp_path / "tx.s2p").resolve()
-    assert config.paths.rx == (tmp_path / "rx.s2p").resolve()
-
+    # Drop section.
+    assert config.drop.touchstone == (tmp_path / "drop.s2p").resolve()
+    assert config.drop.phy_load_ohm == 20000.0
+    # Cable section.
     assert config.cable.l_per_m == pytest.approx(413e-9)
     assert config.cable.c_per_m == pytest.approx(45e-12)
     assert config.cable.rdc_per_m == pytest.approx(0.19)
@@ -99,25 +97,15 @@ def test_loads_complete_valid_config(tmp_path):
 
 
 def test_resolves_paths_in_subdirectory(tmp_path):
-    """Touchstone paths in subdirectories are correctly resolved."""
-    # Create subdirectory and dummy touchstones inside it.
+    """Touchstone path in subdirectory is correctly resolved."""
     subdir = tmp_path / "measurements"
     subdir.mkdir()
-    _make_dummy_touchstone(subdir / "tx.s2p")
-    _make_dummy_touchstone(subdir / "rx.s2p")
-
-    # Config references them with subdirectory prefix.
-    config_dict = _valid_config_dict(
-        tx_filename="measurements/tx.s2p",
-        rx_filename="measurements/rx.s2p")
-
-    # Write config (but disable auto-creation of touchstones, since we made them ourselves).
+    _make_dummy_touchstone(subdir / "drop.s2p")
+    config_dict = _valid_config_dict(touchstone_filename="measurements/drop.s2p") 
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml.safe_dump(config_dict))
     config = load_config(config_path)
-
-    assert config.paths.tx == (subdir / "tx.s2p").resolve()
-    assert config.paths.rx == (subdir / "rx.s2p").resolve()
+    assert config.drop.touchstone == (subdir / "drop.s2p").resolve()
 
 
 def test_raises_file_not_found_for_missing_config(tmp_path):
@@ -183,13 +171,10 @@ def test_rejects_drop_positions_not_a_list(tmp_path):
 
 def test_rejects_missing_touchstone_file(tmp_path):
     """A touchstone file referenced in the config must exist on disk."""
-    config_dict = _valid_config_dict(tx_filename="nonexistent.s2p")
-    # Write config but NOT the tx touchstone file.
+    config_dict = _valid_config_dict(touchstone_filename="nonexistent.s2p")
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml.safe_dump(config_dict))
-    # We still need a valid rx file, since the rx check runs only if tx passes.
-    _make_dummy_touchstone(tmp_path / "rx.s2p")
-    with pytest.raises(ValueError, match="tx_touchstone file not found"):
+    with pytest.raises(ValueError, match="drop.touchstone file not found"):
         load_config(config_path)
 
 
@@ -219,4 +204,13 @@ def test_rejects_implausible_z0(tmp_path):
     config_dict["cable"]["c_per_m"] = 1e-12
     config_path = _write_config(tmp_path, config_dict)
     with pytest.raises(ValueError, match="Z.*at 10 MHz"):
+        load_config(config_path)
+
+
+def test_rejects_non_positive_phy_load(tmp_path):
+    """drop.phy_load_ohm must be strictly positive."""
+    config_dict = _valid_config_dict()
+    config_dict["drop"]["phy_load_ohm"] = 0.0
+    config_path = _write_config(tmp_path, config_dict)  
+    with pytest.raises(ValueError, match="phy_load_ohm must be positive"):
         load_config(config_path)

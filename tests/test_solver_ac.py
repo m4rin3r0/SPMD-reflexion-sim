@@ -6,14 +6,13 @@ import numpy as np
 import pytest
 
 from spmd_reflection.cable.cable_params import CableParams
-from spmd_reflection.drop.load import load_rx_drop, load_tx_drop
-from spmd_reflection.drop.models import RxDropData, TxDropData
+from spmd_reflection.drop.models import DropData
 from spmd_reflection.solver.ac import run_simulation, Z0_REFERENCE
 from spmd_reflection.solver.model import SolverResults
+from spmd_reflection.drop.load import load_drop
 from spmd_reflection.topology.build import build_topology
 from spmd_reflection.topology.models import DropAttachment, Termination, Topology, TrunkSegment
 from spmd_reflection.cable.model import compute_y_params
-
 
 
 def _default_frequency_grid() -> np.ndarray:
@@ -39,132 +38,201 @@ def _realistic_cable() -> CableParams:
         rskin_per_m=5e-7)
 
 
-# def _ideal_through_tx(frequency_hz: np.ndarray) -> TxDropData:
-#     """A TX drop that behaves as a perfect pass-through 2-port.
-    
-#     For a 2-port with S₁₁ = S₂₂ = 0 and S₁₂ = S₂₁ = 1 (matched, lossless,
-#     reciprocal), the equivalent Y-parameters in Z₀ = 100 Ω reference are:
-    
-#         Y₁₁ = Y₂₂ = 0
-#         Y₁₂ = Y₂₁ = -1/Z₀
-    
-#     Physically: a perfect ideal transmission line of zero electrical length.
-#     """
-#     n_freq = len(frequency_hz)
-#     y_params = np.zeros((n_freq, 2, 2), dtype=complex)
-#     y_params[:, 0, 1] = -1.0 / Z0_REFERENCE
-#     y_params[:, 1, 0] = -1.0 / Z0_REFERENCE
-#     return TxDropData(frequency_hz=frequency_hz, y_params=y_params)
-
-
-def _ideal_through_tx(frequency_hz: np.ndarray) -> TxDropData:
-    """A TX drop modeled as a very short, lossless 2-port section.
+def _ideal_drop(frequency_hz:np.ndarray) -> DropData:
+    """A drop modeled as a very short lossless 2-port (1 mm at 100 Ω).
         
-    For analytic tests we want a TX that introduces minimal effect on the bus.
-    A short lossless cable section (1 mm) approximates a direct connection
-    while remaining representable in Y-parameter form.
+    Electrically negligible at our frequencies (<1.5e-4 wavelengths at 30 MHz).
+    Used for both TX and RX drops in analytic tests.
     """
-        
-    # Tiny lossless section, electrically negligible at our frequencies.
     short_section_params = CableParams(
         l_per_m=500e-9,
         c_per_m=50e-12,
         rdc_per_m=0.0,
         rskin_per_m=0.0)
     y_params = compute_y_params(
-        length_m=0.001,   # 1 mm
+        length_m=0.001,
         cable_params=short_section_params,
         frequency_hz=frequency_hz)
-    return TxDropData(frequency_hz=frequency_hz, y_params=y_params)
-
-
-def _open_rx(frequency_hz:np.ndarray) -> RxDropData:
-    """An RX drop with zero shunt admittance (electrically invisible).
-    
-    Useful as a placeholder when the solver requires an RX drop but the
-    test scenario doesn't actually have any RX nodes that would use it.
-    """
-    n_freq = len(frequency_hz)
-    return RxDropData(
-        frequency_hz=frequency_hz,
-        shunt_admittance=np.zeros(n_freq, dtype=complex))
+    return DropData(frequency_hz=frequency_hz, y_params=y_params)
 
 
 def test_tx_in_middle_sees_parallel_terminations():
-    """TX int the middle sees 50 Ω (two 100-Ω-ways parallel) → S11 = -1/3."""
+    """TX in der Mitte sieht 50 Ω → S₁₁ = -1/3."""
     freqs = _default_frequency_grid()
-        
-    # TX in the middle, terminations at both ends
     topology = build_topology(
         drop_positions_m=[3.0],
         bus_start_m=0.0,
         bus_end_m=6.0,
         tx_drop_index=0,
         termination_ohm=100.0)
-        
     result = run_simulation(
         topology=topology,
         cable_params=_lossless_cable(),
-        rx_drop=_open_rx(freqs),
-        tx_drop=_ideal_through_tx(freqs),
+        drop=_ideal_drop(freqs),
+        phy_load_ohm=20000.0,
         frequency_hz=freqs)
-        
-    # source sees 50 Ω, source-impedance 100 Ω → S11 = (50-100)/(50+100) = -1/3
-    expected = 1.0 / 3.0
-    assert np.allclose(np.abs(result.s11_tx), expected, atol=1e-6)
+    # Korrekt: Realteil ≈ -1/3, Imaginärteil ≈ 0
+    assert np.allclose(result.s11_tx.real, -1.0/3.0, atol=1e-4)
+    assert np.allclose(result.s11_tx.imag, 0.0, atol=1e-3)
 
 
 def test_lossless_open_bus_has_unity_reflection():
-    """lossless line without real termination -> |S₁₁| = 1"""
+    """Verlustfreie Leitung ohne reale Termination → |S₁₁| = 1."""
     freqs = _default_frequency_grid()
-        
     topology = build_topology(
         drop_positions_m=[0.0],
         bus_start_m=0.0,
         bus_end_m=2.0,
         tx_drop_index=0,
-        termination_ohm=1e9) # practically open
-        
+        termination_ohm=1e9)
     result = run_simulation(
         topology=topology,
         cable_params=_lossless_cable(),
-        rx_drop=_open_rx(freqs),
-        tx_drop=_ideal_through_tx(freqs),
+        drop=_ideal_drop(freqs),
+        phy_load_ohm=20000.0,
         frequency_hz=freqs)
-   
-    assert np.allclose(np.abs(result.s11_tx), 1.0, atol=1e-6)  # |S₁₁| ≈ 1 
+    assert np.allclose(np.abs(result.s11_tx), 1.0, atol=1e-6)
 
 
 def test_passive_bus_has_bounded_reflection():
-    """passive bus -> |S₁₁| ≤ 1 for all frequencies"""
+    """Passive bus: |S₁₁| ≤ 1, |rx_phy_voltages| ≤ source-voltage"""
     freqs = _default_frequency_grid()
-        
-    # realistic topology
     topology = build_topology(
         drop_positions_m=[1.0, 3.0, 5.0],
         bus_start_m=0.0,
         bus_end_m=7.0,
         tx_drop_index=0,
         termination_ohm=100.0)
-        
     result = run_simulation(
         topology=topology,
         cable_params=_realistic_cable(),
-        rx_drop=_open_rx(freqs),
-        tx_drop=_ideal_through_tx(freqs),
+        drop=_ideal_drop(freqs),
+        phy_load_ohm=20000.0,
         frequency_hz=freqs)
-        
+    # Passive-check: |S₁₁| ≤ 1
     assert np.all(np.abs(result.s11_tx) <= 1.0 + 1e-9)
+    # RX-PHY-voltage shape check: (n_freq, n_rx_drops)
+    # TX is Drop 0, so we've got 2 RX-Drops
+    assert result.rx_phy_voltages.shape == (len(freqs), 2)
+    # RX-PHY-voltages are finite
+    assert np.all(np.isfinite(result.rx_phy_voltages))
 
 
-def test_debug_ideal_through_tx():
-    """Verify that _ideal_through_tx now produces valid S-parameters."""
-    import skrf
-    freqs = np.linspace(1e6, 30e6, 10)
-    tx = _ideal_through_tx(freqs)
+def test_solver_results_have_correct_shapes():
+    """SolverResults has correct shapes and dtypes for all fields."""
+    freqs = _default_frequency_grid()
+    # Single TX drop, no RX drops.
+    topology = build_topology(
+        drop_positions_m=[3.0],
+        bus_start_m=0.0,
+        bus_end_m=6.0,
+        tx_drop_index=0,
+        termination_ohm=100.0)  
+    result = run_simulation(
+        topology=topology,
+        cable_params=_lossless_cable(),
+        drop=_ideal_drop(freqs),
+        phy_load_ohm=20000.0,
+        frequency_hz=freqs)
+    assert isinstance(result, SolverResults)
+    assert result.frequency_hz.shape == (len(freqs),)
+    assert result.s11_tx.shape == (len(freqs),)
+    assert result.s11_tx.dtype == np.complex128
+    assert result.node_voltages.shape == (len(freqs), topology.n_nodes)
+    assert result.node_voltages.dtype == np.complex128
+    # No RX drops → second dimension is 0.
+    assert result.rx_phy_voltages.shape == (len(freqs), 0)
+    assert result.rx_phy_voltages.dtype == np.complex128
+
+
+def test_rejects_mismatched_drop_frequency_grid():
+    """Drop frequency grid must match the simulation grid."""
+    freqs = _default_frequency_grid()
+    different_freqs = np.linspace(2e6, 25e6, 50)   
+    topology = build_topology(
+        drop_positions_m=[3.0],
+        bus_start_m=0.0,
+        bus_end_m=6.0,
+        tx_drop_index=0,
+        termination_ohm=100.0)
+    with pytest.raises(ValueError, match="does not match"):
+        run_simulation(
+            topology=topology,
+            cable_params=_lossless_cable(),
+            drop=_ideal_drop(different_freqs),
+            phy_load_ohm=20000.0,
+            frequency_hz=freqs)
         
-    freq = skrf.Frequency.from_f(freqs, unit="Hz")
-    network = skrf.Network(frequency=freq, y=tx.y_params, z0=Z0_REFERENCE)
+
+def test_rejects_topology_without_tx():
+    """A topology with no TX drop is rejected by the solver."""
+    freqs = _default_frequency_grid()
+    # Construct a topology manually that has no TX drop.
+    # build_topology always sets exactly one TX, so we bypass it here.
+    topology = Topology(
+        n_nodes=2,
+        trunk_segments=(TrunkSegment(node_a=0, node_b=1, length_m=2.0)),
+        drops=(DropAttachment(trunk_node=0, role="rx"),DropAttachment(trunk_node=1, role="rx")),
+        terminations=(Termination(node=0, impedance_ohm=100.0),Termination(node=1, impedance_ohm=100.0))) 
+    with pytest.raises(ValueError, match="exactly one TX drop"):
+        run_simulation(
+            topology=topology,
+            cable_params=_lossless_cable(),
+            drop=_ideal_drop(freqs),
+            phy_load_ohm=20000.0,
+            frequency_hz=freqs)
         
-    print(f"|S11| max = {np.abs(network.s[:, 0, 0]).max()}")
-    print(f"|S21| min = {np.abs(network.s[:, 1, 0]).min()}")
+
+def test_rx_phy_voltages_differ_between_drops():
+    """RX drops at different positions receive different signal levels."""
+    freqs = _default_frequency_grid()
+    topology = build_topology(
+        drop_positions_m=[0.0, 2.0, 4.0],
+        bus_start_m=0.0,
+        bus_end_m=6.0,
+        tx_drop_index=0,
+        termination_ohm=100.0)
+    result = run_simulation(
+        topology=topology,
+        cable_params=_realistic_cable(),
+        drop=_ideal_drop(freqs),
+        phy_load_ohm=20000.0,
+        frequency_hz=freqs)
+    # Shape check.
+    assert result.rx_phy_voltages.shape == (len(freqs), 2)
+    # check voltages are finite and positive.
+    assert np.all(np.isfinite(result.rx_phy_voltages))
+    assert np.all(np.abs(result.rx_phy_voltages) > 0) 
+    # The two RX drops receive different signal levels (position matters).
+    v_near = np.abs(result.rx_phy_voltages[:, 0])
+    v_far  = np.abs(result.rx_phy_voltages[:, 1])
+    assert not np.allclose(v_near, v_far, rtol=1e-3)
+
+
+def test_smoke_real_measurement():
+    """Smoke test: full simulation with a real jumped LiteVNA measurement."""
+    real_file = (Path(__file__).parent.parent/"examples"/"LiteVNA_meas_board2_jumped_differential.s2p")
+    if not real_file.is_file():
+        pytest.skip(f"real measurement file not found at {real_file}")
+    freqs = np.linspace(1e6, 30e6, 100)
+    drop = load_drop(real_file, freqs)
+    topology = build_topology(
+        drop_positions_m=[1.0, 3.0, 5.0],
+        bus_start_m=0.0,
+        bus_end_m=7.0,
+        tx_drop_index=0,
+        termination_ohm=100.0)
+    result = run_simulation(
+        topology=topology,
+        cable_params=_realistic_cable(),
+        drop=drop,
+        phy_load_ohm=20000.0,
+        frequency_hz=freqs)
+    # Shape checks.
+    assert result.rx_phy_voltages.shape == (100, 2)
+    assert result.s11_tx.shape == (100,)
+    # Finiteness.
+    assert np.all(np.isfinite(result.s11_tx))
+    assert np.all(np.isfinite(result.rx_phy_voltages))
+    # Passivity.
+    assert np.all(np.abs(result.s11_tx) <= 1.0 + 1e-9)

@@ -4,7 +4,7 @@ from typing import Any
 import yaml
 
 from spmd_reflection.cable.cable_params import CableParams
-from spmd_reflection.config.models import FrequencyGrid, SimConfig, TopologyConfig, TouchstonePaths
+from spmd_reflection.config.models import DropConfig, FrequencyGrid, SimConfig, TopologyConfig
 
 
 def _read_yaml(path:Path) -> dict[str,Any]:
@@ -14,6 +14,7 @@ def _read_yaml(path:Path) -> dict[str,Any]:
     if not isinstance(data, dict):
         raise ValueError(f"config file {path} must contain a mapping at the top level")
     return data
+
 
 def _parse_frequency(data:dict[str,Any]) -> FrequencyGrid:
     """Parse and validate the frequency section of the config."""
@@ -32,6 +33,7 @@ def _parse_frequency(data:dict[str,Any]) -> FrequencyGrid:
         raise ValueError(f"frequency.n_points must be at least 2, got {n_points}")
     return FrequencyGrid(start_hz=start_hz, stop_hz=stop_hz, n_points=n_points)
 
+
 def _parse_topology(data:dict[str,Any]) -> TopologyConfig:
     """Parse the topology section. Semantic validation is delegated to build_topology."""
     required = {"drop_positions_m", "bus_start_m", "bus_end_m", "tx_drop_index", "termination_ohm"}
@@ -49,28 +51,34 @@ def _parse_topology(data:dict[str,Any]) -> TopologyConfig:
         tx_drop_index=int(data["tx_drop_index"]),
         termination_ohm=float(data["termination_ohm"]))
 
-def _parse_paths(data:dict[str,Any], config_dir:Path) -> TouchstonePaths:
-    """Parse touchstone paths and resolve them relative to the config directory.
+
+def _parse_drop(data:dict, config_dir:Path) -> DropConfig:
+    """Parse the drop section: touchstone path and PHY load impedance.
+        
     Args:
-        data: The 'paths' section of the YAML config.
-        config_dir: Directory containing the config file. Relative paths in
-            the config are resolved against this directory.
+        data: The 'drop' section of the config dict.
+        config_dir: Directory of the config file (for resolving relative paths).
+        
     Returns:
-        TouchstonePaths with absolute paths.
+        DropConfig with resolved path and validated PHY load.
+        
     Raises:
-        ValueError: If required keys are missing or files do not exist.
+        ValueError: On missing fields or invalid values.
+        FileNotFoundError: If the touchstone file does not exist (raised via ValueError).
     """
-    required = {"tx_touchstone", "rx_touchstone"}
+    required = {"touchstone"}
     missing = required - data.keys()
     if missing:
-        raise ValueError(f"paths section missing required keys: {sorted(missing)}")
-    tx_path = (config_dir / data["tx_touchstone"]).resolve()
-    rx_path = (config_dir / data["rx_touchstone"]).resolve()
-    if not tx_path.is_file():
-        raise ValueError(f"tx_touchstone file not found: {tx_path}")
-    if not rx_path.is_file():
-        raise ValueError(f"rx_touchstone file not found: {rx_path}")
-    return TouchstonePaths(tx=tx_path, rx=rx_path)
+        raise ValueError(f"drop section missing required keys: {sorted(missing)}")  
+    touchstone_path = (config_dir / data["touchstone"]).resolve()
+    if not touchstone_path.is_file():
+        raise ValueError(f"drop.touchstone file not found: {touchstone_path}") 
+    # phy_load_ohm: optional, defaults to 20 kΩ.
+    phy_load_ohm = float(data.get("phy_load_ohm", 20000.0))
+    if phy_load_ohm <= 0:
+        raise ValueError(f"drop.phy_load_ohm must be positive, got {phy_load_ohm}")
+    return DropConfig(touchstone=touchstone_path, phy_load_ohm=phy_load_ohm,)
+
 
 def _parse_cable(data:dict[str,Any]) -> CableParams:
     """Parse cable parameters and validate physical plausibility."""
@@ -100,6 +108,7 @@ def _parse_cable(data:dict[str,Any]) -> CableParams:
             f"expected near 100 Ω. Check l_per_m and c_per_m units (must be H/m and F/m).")
     return params
 
+
 def load_config(path:Path) -> SimConfig:
     """Load and validate a simulation configuration from a YAML file.
     Args:
@@ -111,14 +120,14 @@ def load_config(path:Path) -> SimConfig:
         yaml.YAMLError: If the file is not valid YAML.
         ValueError: If the config structure or values are invalid.
     """
-    path = Path(path).resolve()
-    raw = _read_yaml(path)
-    required_sections = {"frequency", "topology", "paths", "cable"}
-    missing = required_sections - raw.keys()
+    config_path = Path(path).resolve()
+    data = _read_yaml(path)
+    required_sections = {"frequency", "topology", "drop", "cable"}
+    missing = required_sections - data.keys()
     if missing:
         raise ValueError(f"config missing required sections: {sorted(missing)}")
     return SimConfig(
-        frequency=_parse_frequency(raw["frequency"]),
-        topology=_parse_topology(raw["topology"]),
-        paths=_parse_paths(raw["paths"], path.parent),
-        cable=_parse_cable(raw["cable"]))
+        frequency=_parse_frequency(data["frequency"]),
+        topology=_parse_topology(data["topology"]),
+        drop=_parse_drop(data["drop"], config_path.parent),
+        cable=_parse_cable(data["cable"]))
