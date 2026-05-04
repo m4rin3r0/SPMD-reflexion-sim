@@ -57,7 +57,7 @@ def _ideal_drop(frequency_hz:np.ndarray) -> DropData:
 
 
 def test_tx_in_middle_sees_parallel_terminations():
-    """TX in der Mitte sieht 50 Ω → S₁₁ = -1/3."""
+    """TX in the middle sees 50 Ω → S₁₁ = -1/3."""
     freqs = _default_frequency_grid()
     topology = build_topology(
         drop_positions_m=[3.0],
@@ -77,7 +77,7 @@ def test_tx_in_middle_sees_parallel_terminations():
 
 
 def test_lossless_open_bus_has_unity_reflection():
-    """Verlustfreie Leitung ohne reale Termination → |S₁₁| = 1."""
+    """lossless line without real termination → |S₁₁| = 1."""
     freqs = _default_frequency_grid()
     topology = build_topology(
         drop_positions_m=[0.0],
