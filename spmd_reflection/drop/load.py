@@ -34,8 +34,6 @@ def _load_and_validate_touchstone(path:Path, frequency_hz:np.ndarray) -> skrf.Ne
         raise ValueError(f"expected a 2-port Touchstone file, but {path.name} has {network.nports} ports")
     file_freq_min = network.f.min()
     file_freq_max = network.f.max()
-    file_freq_min = network.f.min()
-    file_freq_max = network.f.max()
     if frequency_hz.min() < file_freq_min or frequency_hz.max() > file_freq_max:
         raise ValueError(
             f"simulation range [{frequency_hz.min():.3e}, {frequency_hz.max():.3e}] Hz "
