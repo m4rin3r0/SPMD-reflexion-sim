@@ -183,7 +183,7 @@ def check_tci_rl(frequency_hz:np.ndarray, rl_tci_db:np.ndarray) -> np.ndarray:
 
 
 def check_mpi_rl(frequency_hz:np.ndarray, rl_tci_db:np.ndarray, n_unit:int=16) -> np.ndarray:
-    """Check MPI RL conformance against Eq. 189-1."""
+    """Check MPI RL conformance against Eq. 189-1"""
     limit = mpi_rl_mask(frequency_hz, n_unit=n_unit)
     if rl_tci_db.ndim == 2:
         limit = limit[:, np.newaxis]
@@ -194,11 +194,22 @@ def check_mpi_rl(frequency_hz:np.ndarray, rl_tci_db:np.ndarray, n_unit:int=16) -
 
 
 def check_mpi_il(frequency_hz:np.ndarray, il_tci_db:np.ndarray, n_unit:int=16) -> np.ndarray:
-    """Check MPI IL conformance against Eq. 189-2 / 188-5."""
+    """Check MPI IL conformance against Eq. 189-2 / 188-5"""
     limit = mpi_il_mask(frequency_hz, n_unit=n_unit)
     if il_tci_db.ndim == 2:
         limit = limit[:, np.newaxis]
     nan_mask = np.isnan(limit)
     conformant = il_tci_db <= limit
+    conformant[np.broadcast_to(nan_mask, conformant.shape)] = True
+    return conformant
+
+
+def check_ms_il(frequency_hz:np.ndarray, il_ms_db:np.ndarray) -> np.ndarray:
+    """Check Mixing Segment IL conformance against Eq. 188-3"""
+    limit = mixing_segment_il_mask(frequency_hz)
+    if il_ms_db.ndim == 2:
+        limit = limit[:, np.newaxis]
+    nan_mask = np.isnan(limit)
+    conformant = il_ms_db <= limit
     conformant[np.broadcast_to(nan_mask, conformant.shape)] = True
     return conformant

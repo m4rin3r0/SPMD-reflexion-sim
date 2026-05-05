@@ -1,6 +1,7 @@
 """Extract physical quantities from solver results and drop data."""
 
 from __future__ import annotations
+from typing import Optional
 
 import numpy as np
 
@@ -69,7 +70,7 @@ def _compute_tci_quantities(drop:DropData, phy_load_ohm:float) -> tuple[np.ndarr
     rl_tci_db = -20.0 * np.log10(np.abs(gamma_tc))
     return il_tci_db, rl_tci_db
 
-def compute_bus_results(results:SolverResults, topology:Topology, drop:DropData, phy_load_ohm:float) -> BusResults:
+def compute_bus_results(results:SolverResults, topology:Topology, drop:DropData, phy_load_ohm:float, il_ms_db=Optional[np.ndarray]) -> BusResults:
     """Extract physical quantities from solver results and drop data.
 
     Computes:
@@ -102,4 +103,4 @@ def compute_bus_results(results:SolverResults, topology:Topology, drop:DropData,
         il_phy_db=il_phy_db,
         il_tci_db=il_tci_db,
         rl_tci_db=rl_tci_db,
-        il_ms_db=None)
+        il_ms_db=il_ms_db)

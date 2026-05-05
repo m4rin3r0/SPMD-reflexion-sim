@@ -36,8 +36,8 @@ def _stamp_two_port(y_matrix:np.ndarray, y_2port:np.ndarray, node_a:int, node_b:
     y_matrix[:, node_b, node_b] += y_2port[:, 1, 1]
 
 
-def _assemble_y_matrix(topology:Topology, cable_params:CableParams, drop:DropData, phy_load_ohm:float, frequency_hz:np.ndarray) -> tuple[np.ndarray,int,list[int]]:
-    """Assemble the global Y-matrix from topology, cable, and drop data.
+def _assemble_y_matrix_no_terminations(topology:Topology, cable_params:CableParams, drop:DropData, phy_load_ohm:float, frequency_hz:np.ndarray) -> tuple[np.ndarray,int,list[int]]:
+    """Assemble the global Y-matrix from topology, cable, and drop data without terminations
 
     Conceptually:
       - Trunk segments are stamped as 2-ports between their nodes.
@@ -47,7 +47,6 @@ def _assemble_y_matrix(topology:Topology, cable_params:CableParams, drop:DropDat
         RX-PHY node.
       - For the TX drop: no shunt is added; the Norton source admittance will
         be added later in _compute_s11_and_voltages.
-      - Edge terminations are stamped as shunt admittances at their nodes.
 
     Node layout in the Y-matrix:
       [0 .. n_topology_nodes-1]    : topology nodes
@@ -91,7 +90,32 @@ def _assemble_y_matrix(topology:Topology, cable_params:CableParams, drop:DropDat
             # Add the PHY load as a shunt at the RX-PHY node.
             y_matrix[:, phy_node, phy_node] += 1.0 / phy_load_ohm
         _stamp_two_port(y_matrix, drop.y_params, d.trunk_node, phy_node)
-    # 3. Edge terminations.
+    return y_matrix, tx_phy_node, rx_phy_nodes
+
+
+def _assemble_y_matrix(topology:Topology, cable_params:CableParams, drop:DropData, phy_load_ohm:float, frequency_hz:np.ndarray) -> tuple[np.ndarray, int, list[int]]:
+    """Assemble the global Y-matrix including edge terminations
+    
+    Conceptually:
+      - Everything from _assemble_y_matrix_no_terminations
+      - Edge terminations are stamped as shunt admittances at their nodes.
+
+    Args:
+        topology: The bus topology.
+        cable_params: Distributed cable parameters (per meter).
+        drop: Drop measurement data (used for both TX and all RX drops).
+        phy_load_ohm: PHY input impedance for RX drops (Ω).
+        frequency_hz: Simulation frequency grid (Hz).
+
+    Returns:
+        A tuple (y_matrix, tx_phy_node, rx_phy_nodes) where:
+            y_matrix: Complex array of shape (n_freq, n_total, n_total).
+            tx_phy_node: Index of the TX-PHY node (last index).
+            rx_phy_nodes: Indices of the RX-PHY nodes, in the order of the
+                RX drops as they appear in topology.drops.
+    """
+    y_matrix, tx_phy_node, rx_phy_nodes = _assemble_y_matrix_no_terminations(topology, cable_params, drop, phy_load_ohm, frequency_hz)
+    # Add edge terminations.
     for termination in topology.terminations:
         y_termination = 1.0 / termination.impedance_ohm
         y_matrix[:, termination.node, termination.node] += y_termination
@@ -192,3 +216,48 @@ def run_simulation(topology:Topology, cable_params:CableParams, drop:DropData, p
         s11_tx=s11,
         node_voltages=node_voltages,
         rx_phy_voltages=rx_phy_voltages)
+
+
+def run_mixing_segment_simulation(topology:Topology, cable_params:CableParams, drop:DropData, phy_load_ohm:float, frequency_hz:np.ndarray) -> np.ndarray:
+    """Compute mixing segment IL per IEEE 802.3da 188.8.1.
+
+    Places a Norton source at the left bus-end node and measure the voltage at the right bus-end node. The edge terminations are replaced
+    by the source and load impedances (100 Ω each), as specified by the standard ('substituting the measurement probes for the edge terminators').
+
+    Args:
+        topology: Bus topology.
+        cable_params: Distributed cable parameters.
+        drop: Drop measurement data.
+        phy_load_ohm: PHY input impedance for RX drops (Ω).
+        frequency_hz: Simulation frequency grid (Hz).
+
+    Returns:
+        ms_il_db: shape (n_freq,), mixing segment IL in dB. Positive = loss.
+    """
+    n_freq = len(frequency_hz)
+    # Identify bus-end nodes from terminations.
+    left_node  = min(t.node for t in topology.terminations)
+    right_node = max(t.node for t in topology.terminations)
+    # Build Y-matrix WITHOUT edge terminations (they are replaced by probes).
+    y_matrix, _, rx_phy_nodes = _assemble_y_matrix_no_terminations(topology, cable_params, drop, phy_load_ohm, frequency_hz)
+    ysrc  = 1.0 / Z0_REFERENCE
+    yload = 1.0 / Z0_REFERENCE
+    ms_il_db = np.empty(n_freq)
+    for freq_idx in range(n_freq):
+        y_total = y_matrix[freq_idx].copy()
+        # Source impedance at left node.
+        y_total[left_node, left_node] += ysrc
+        # Load impedance at right node.
+        y_total[right_node, right_node] += yload
+        # Norton current at left node.
+        i_vec = np.zeros(y_total.shape[0], dtype=complex)
+        i_vec[left_node] = ysrc
+        v = np.linalg.solve(y_total, i_vec)
+        # S21 between left and right node.
+        v_source = v[left_node]
+        v_load   = v[right_node]
+        i_source = ysrc - ysrc * v_source
+        a1 = v_source + i_source * Z0_REFERENCE
+        s21 = 2.0 * v_load / a1   # S21 = 2*V_load / a1 for matched load
+        ms_il_db[freq_idx] = -20.0 * np.log10(np.abs(s21))
+    return ms_il_db

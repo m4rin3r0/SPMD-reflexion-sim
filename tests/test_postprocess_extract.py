@@ -201,6 +201,7 @@ def test_ms_il_db_is_none():
     """ms_il_db is None while Mixing Segment IL not implemented"""
     freqs = _default_frequency_grid()
     n_freq = len(freqs)
+    ms_il = np.zeros(n_freq)
     topology = build_topology(
         drop_positions_m=[3.0],
         bus_start_m=0.0,
@@ -212,8 +213,9 @@ def test_ms_il_db_is_none():
         freqs,
         np.zeros(n_freq, dtype=complex),
         np.zeros((n_freq, 0), dtype=complex))
-    bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0)
-    assert bus.il_ms_db is None
+    bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0, il_ms_db=ms_il)
+    assert bus.il_ms_db is not None
+    assert bus.il_ms_db.shape == (n_freq,)
 
 
 def test_bus_results_all_shapes_correct():
@@ -235,14 +237,14 @@ def test_bus_results_all_shapes_correct():
         np.full(n_freq, 0.1, dtype=complex),
         rx_phy_voltages)
     drop = _make_drop_with_admittance(freqs, y_trunk=0.0) 
-    bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0)
+    bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0, il_ms_db=np.zeros(n_freq))
     assert isinstance(bus, BusResults)
     assert bus.frequency_hz.shape == (n_freq,)
     assert bus.rl_db.shape == (n_freq,)
     assert bus.il_phy_db.shape == (n_freq, n_rx_drops)
     assert bus.il_tci_db.shape == (n_freq, n_drops)
     assert bus.rl_tci_db.shape == (n_freq, n_drops)
-    assert bus.il_ms_db is None
+    assert bus.il_ms_db.shape == (n_freq,)
 
 
 def test_smoke_with_real_solver_output():

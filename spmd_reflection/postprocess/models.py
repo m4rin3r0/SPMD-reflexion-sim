@@ -25,7 +25,6 @@ class BusResults:
         ms_il_db: Mixing segment insertion loss. Shape (n_freq,).
             IL_MS per IEEE 188.8.1 (Eq. 188-3). Measured between edge termination
             reference planes in 100 Ω with all station loads attached.
-            Not yet implemented
     """
     frequency_hz: np.ndarray
     rl_db: np.ndarray

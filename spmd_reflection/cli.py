@@ -9,7 +9,7 @@ from spmd_reflection.config.load import load_config
 from spmd_reflection.drop.load import load_drop
 from spmd_reflection.postprocess.extract import compute_bus_results
 from spmd_reflection.postprocess.models import BusResults
-from spmd_reflection.solver.ac import run_simulation
+from spmd_reflection.solver.ac import run_mixing_segment_simulation, run_simulation
 from spmd_reflection.topology.build import build_topology
 
 
@@ -44,9 +44,17 @@ def run(config_path:Path) -> BusResults:
         drop=drop,
         phy_load_ohm=config.drop.phy_load_ohm,
         frequency_hz=frequency_hz)
+    
+    il_ms_db = run_mixing_segment_simulation(
+        topology=topology,
+        cable_params=config.cable,
+        drop=drop,
+        phy_load_ohm=config.drop.phy_load_ohm,
+        frequency_hz=frequency_hz)
 
     return compute_bus_results(
         results=solver_results,
         topology=topology,
         drop=drop,
-        phy_load_ohm=config.drop.phy_load_ohm)
+        phy_load_ohm=config.drop.phy_load_ohm,
+        il_ms_db=il_ms_db)
