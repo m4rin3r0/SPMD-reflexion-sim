@@ -1,6 +1,6 @@
 frequency:
   start_hz: 300000.0
-  stop_hz: 40000000.0
+  stop_hz: 39999930.0
   n_points: 1001
 
 topology:
