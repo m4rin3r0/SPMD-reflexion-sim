@@ -1,0 +1,21 @@
+frequency:
+  start_hz: 300000.0
+  stop_hz: 40000000.0
+  n_points: 1001
+
+topology:
+  drop_positions_m: [1.0, 3.0, 5.0]
+  bus_start_m: 0.0
+  bus_end_m: 6.0
+  tx_drop_index: 0
+  termination_ohm: 100.0
+
+drop:
+  touchstone: examples/LiteVNA_meas_board2_jumped_differential.s2p
+  phy_load_ohm: 20000.0
+
+cable:
+  l_per_m: 413e-9
+  c_per_m: 45e-12
+  rdc_per_m: 0.19
+  rskin_per_m: 5e-7
