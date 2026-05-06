@@ -4,23 +4,25 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spmd-reflection-sim"
-version = "0.1.0"
-description = "AC-domain reflection/transfer simulation for SPMD mixing segments"
+version = "1.0.0"
+description = "Signal integrity simulation for 10BASE-T1M Automotive Ethernet multi-drop bus systems with PoDL"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
   { name = "Leon Seemann" }
 ]
 dependencies = [
-  "numpy",
-  "matplotlib",
-  "pytest>=7.0",
+  "numpy>=1.24",
+  "matplotlib>=3.7",
   "pyyaml>=6.0",
-  "scikit-rf>=1.11.0",
-  ]
+  "scikit-rf>=1.0",
+]
 
-[project.scripts]
-spmd-reflection-sim = "cli:main"
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",
+  "jupyter>=1.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
