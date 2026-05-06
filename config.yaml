@@ -11,7 +11,7 @@ topology:
   termination_ohm: 100.0
 
 drop:
-  touchstone: examples/LiteVNA_meas_board2_jumped_differential.s2p
+  touchstone: measurements/meas_differential.s2p
   phy_load_ohm: 20000.0
 
 cable:
