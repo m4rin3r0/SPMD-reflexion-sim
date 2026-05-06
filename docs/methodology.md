@@ -190,6 +190,9 @@ through a shunt element between two 100 Ω lines is:
 
 $$S_{21,\text{TCI}} = \frac{2}{2 + Z_0 \cdot Y_\text{drop}(f)}$$
 
+The S₂₁ formula for a shunt element and the reflection coefficient formula is derived 
+from standard two-port network theory [Pozar, Microwave Engineering].
+
 The TCI insertion loss is then:
 
 $$\text{IL}_\text{TCI}(f) = -20 \log_{10}(|S_{21,\text{TCI}}|) \quad [\text{dB}]$$
