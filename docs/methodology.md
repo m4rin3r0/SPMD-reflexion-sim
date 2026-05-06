@@ -2,6 +2,8 @@
 
 This document describes how the physical quantities computed by `spmd_reflection`
 are derived from measured S-parameters and the nodal admittance matrix solver.
+It serves as a reference for the simulation software and as a basis for the
+methodology chapter of the thesis.
 
 ---
 
@@ -41,7 +43,7 @@ The same Touchstone file is used for both TX and RX drops. The role-specific
 termination is applied externally by the solver:
 
 - **TX drop**: Norton source at the PHY-side port
-- **RX drop**: PHY load resistance (approximated with 20 kΩ) at the PHY-side port
+- **RX drop**: PHY load resistance (typically 20 kΩ) at the PHY-side port
 
 ### 1.4 Norton Source Model
 
@@ -61,12 +63,12 @@ and with the IEEE 802.3da measurement reference.
 ### 1.6 Frequency-Independent Terminations
 
 Edge terminations are modeled as ideal resistors, independent of frequency.
-It is not intended to model AC-coupled terminations.
+AC-coupled terminations (as used in PoDL configurations) are not yet modeled.
 
 ### 1.7 Uniform Drop Population
 
 All drop positions use the same Touchstone file. Per-drop variation
-(manufacturing tolerances, individual measurements) is not modeled.
+(manufacturing tolerances, individual measurements) is not currently modeled.
 This is a deliberate simplification to reduce measurement effort; the
 architecture supports per-drop files as a future extension.
 
@@ -143,11 +145,11 @@ where the port current is:
 
 $$I_\text{tx} = Y_s - Y_s \cdot V_\text{tx} = Y_s (1 - V_\text{tx})$$
 
-The reflection coefficient and return loss are:
+The reflection coefficient and return loss are then:
 
 $$S_{11} = \frac{b_1}{a_1}, \quad \text{RL}_\text{Bus}(f) = -20 \log_{10}(|S_{11}|) \quad [\text{dB}]$$
 
-A higher RL value indicates less reflected energy, so better impedance matching.
+A higher RL value indicates less reflected energy, i.e., better impedance matching.
 
 ---
 
@@ -190,9 +192,6 @@ through a shunt element between two 100 Ω lines is:
 
 $$S_{21,\text{TCI}} = \frac{2}{2 + Z_0 \cdot Y_\text{drop}(f)}$$
 
-The S₂₁ formula for a shunt element and the reflection coefficient formula is derived 
-from standard two-port network theory [Pozar, Microwave Engineering].
-
 The TCI insertion loss is then:
 
 $$\text{IL}_\text{TCI}(f) = -20 \log_{10}(|S_{21,\text{TCI}}|) \quad [\text{dB}]$$
@@ -219,24 +218,48 @@ would be required, and the formula above would not apply.
 The **TCI return loss** quantifies the impedance match of the drop at the trunk
 port. It is defined by IEEE 802.3da Clause 188 (Eq. 188-6).
 
-The trunk-side reflection coefficient is:
+### 6.1 Derivation Under Case A
 
-$$\Gamma_\text{TC}(f) = \frac{Y_0 - Y_\text{drop}(f)}{Y_0 + Y_\text{drop}(f)}$$
+Under the parallel-shunt assumption (Case A), the drop PCB presents a shunt
+admittance $Y_\text{drop}(f)$ to the trunk. The reflection at the trunk port
+is caused by the impedance discontinuity introduced by the shunt element between
+two $Z_0$ transmission lines.
 
-where $Y_0 = 1/Z_0 = 0.01\,\text{S}$ and $Y_\text{drop}$ is the trunk-side
-input admittance defined in Section 5.2. The TCI return loss is:
+Using nodal analysis at the junction of the incoming line, the shunt element,
+and the outgoing line, the reflection coefficient is:
 
-$$\text{RL}_\text{TCI}(f) = -20 \log_{10}(|\Gamma_\text{TC}|) \quad [\text{dB}]$$
+$$S_{11,\text{TCI}}(f) = \frac{-Z_0 \cdot Y_\text{drop}(f)}{2 + Z_0 \cdot Y_\text{drop}(f)}$$
 
-A higher RL_TCI value indicates better impedance matching at the trunk port,
-meaning the drop causes fewer reflections on the bus.
+Note that $S_{11,\text{TCI}}$ and $S_{21,\text{TCI}}$ share the same denominator,
+which is consistent with energy conservation: for a lossless shunt element,
+$|S_{11}|^2 + |S_{21}|^2 = 1$.
 
-**Note on interpretation:** For a high-impedance PHY load ($R_\text{PHY} \gg Z_0$),
-the trunk-side admittance $Y_\text{drop}$ is small compared to $Y_0$, so
-$\Gamma_\text{TC} \approx 1$ and RL_TCI is small. This is physically correct:
-a weakly-coupled drop reflects most of the incident wave, but also disturbs the
-bus very little. The IEEE RL_TCI mask (Eq. 188-6) sets a lower bound on RL_TCI
-to ensure the drop does not cause excessive reflections.
+The TCI return loss is:
+
+$$\text{RL}_\text{TCI}(f) = -20 \log_{10}(|S_{11,\text{TCI}}|) \quad [\text{dB}]$$
+
+### 6.2 Physical Interpretation
+
+The formula has the correct limiting behavior:
+
+- $Y_\text{drop} \to 0$ (drop electrically invisible): $S_{11} \to 0$, RL → ∞ dB —
+  a weakly-coupled drop causes no reflections on the trunk.
+- $Y_\text{drop} \to \infty$ (short circuit): $S_{11} \to -1$, RL → 0 dB —
+  a short circuit reflects the entire incident wave.
+- $Y_\text{drop} = Y_0$ (matched to trunk): $S_{11} = -1/3$, RL ≈ 9.5 dB.
+
+For a typical RX drop with a high-impedance PHY load ($R_\text{PHY} = 20\,\text{k}\Omega$),
+$Y_\text{drop} \ll Y_0$, resulting in very small reflections and high RL_TCI.
+This is the physically correct and desirable behavior: a drop that barely loads
+the trunk causes minimal signal disturbance.
+
+**Note on earlier incorrect formula:** An earlier version of this document used
+$\Gamma = (Y_0 - Y_\text{drop})/(Y_0 + Y_\text{drop})$, which is the reflection
+formula for a shunt load **at the end of a line** — not for a shunt element
+**between** two line sections. That formula incorrectly predicts $\Gamma \approx 1$
+for a high-impedance drop, which contradicts the physical expectation and the
+IL_TCI result. The corrected formula above is derived from the proper two-port
+junction analysis.
 
 ---
 

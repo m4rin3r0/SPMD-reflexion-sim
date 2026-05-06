@@ -56,19 +56,22 @@ def _compute_il_phy(rx_phy_voltages:np.ndarray) -> np.ndarray:
 def _compute_tci_quantities(drop:DropData, phy_load_ohm:float) -> tuple[np.ndarray, np.ndarray]:
     """TCI IL and RL from trunk-side input admittance.
 
+    For a shunt element between two Z0 transmission lines:
+        S21_TCI = 2 / (2 + Z0 * Y_drop)          [transmission]
+        S11_TCI = -Z0 * Y_drop / (2 + Z0 * Y_drop) [reflection]
+
     Returns:
-        il_tci_db: shape (n_freq,), IL_TCI = -20*log10(|S21_TCI|)
-        rl_tci_db: shape (n_freq,), RL_TCI = -20*log10(|Gamma_TC|)
+        il_tci_db: shape (n_freq,), IL_TCI = -20*log10(|S21_TCI|).
+        rl_tci_db: shape (n_freq,), RL_TCI = -20*log10(|S11_TCI|).
     """
-    y0 = 1.0 / Z0_REFERENCE
     y_drop = _compute_drop_admittance(drop, phy_load_ohm)
-    # S21_TCI for parallel shunt: S21 = 2 / (2 + Z0 * Y_drop).
-    s21_tci = 2.0 / (2.0 + Z0_REFERENCE * y_drop)
+    denominator = 2.0 + Z0_REFERENCE * y_drop
+    s21_tci = 2.0 / denominator
+    s11_tci = -Z0_REFERENCE * y_drop / denominator
     il_tci_db = -20.0 * np.log10(np.abs(s21_tci))
-    # Gamma_TC = (Y0 - Y_drop) / (Y0 + Y_drop).
-    gamma_tc = (y0 - y_drop) / (y0 + y_drop)
-    rl_tci_db = -20.0 * np.log10(np.abs(gamma_tc))
+    rl_tci_db = -20.0 * np.log10(np.abs(s11_tci))
     return il_tci_db, rl_tci_db
+
 
 def compute_bus_results(results:SolverResults, topology:Topology, drop:DropData, phy_load_ohm:float, il_ms_db=Optional[np.ndarray]) -> BusResults:
     """Extract physical quantities from solver results and drop data.

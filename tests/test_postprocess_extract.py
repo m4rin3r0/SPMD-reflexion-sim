@@ -154,25 +154,25 @@ def test_il_tci_is_zero_db_for_invisible_drop():
 
 
 def test_rl_tci_is_high_for_matched_drop():
-    """Y_drop = Y_0 (perfect match) -> Gamma = 0 → RL_TCI sehr hoch"""
+    """Y_drop = Y0 ergibt S11 = -1/3 → RL_TCI ≈ 9.5 dB."""
     freqs = _default_frequency_grid()
     n_freq = len(freqs)
     results = _make_solver_results(
         freqs,
         np.zeros(n_freq, dtype=complex),
-        np.zeros((n_freq, 0), dtype=complex))
+        np.zeros((n_freq, 0), dtype=complex))  
     topology = build_topology(
         drop_positions_m=[3.0],
         bus_start_m=0.0,
         bus_end_m=6.0,
         tx_drop_index=0,
-        termination_ohm=100.0)
-    # Y_drop = Y0 → Gamma = (Y0 - Y0)/(Y0 + Y0) = 0 → RL → inf
-    y0 = 1.0 / 100.0
-    drop = _make_drop_with_admittance(freqs, y_trunk=y0)
+        termination_ohm=100.0)  
+    y0 = 1.0 / Z0_REFERENCE
+    drop = _make_drop_with_admittance(freqs, y_trunk=y0) 
     bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0)
-    # RL should be very big
-    assert np.all(bus.rl_tci_db > 100.0)
+    # S11 = -Z0*Y0 / (2 + Z0*Y0) = -1/3 → RL = -20*log10(1/3) ≈ 9.54 dB
+    expected_rl = -20.0 * np.log10(1.0 / 3.0)
+    assert np.allclose(bus.rl_tci_db, expected_rl, atol=1e-6)
 
 
 def test_il_tci_and_rl_tci_have_correct_shape():
