@@ -11,7 +11,7 @@ topology:
   termination_ohm: 100.0
 
 drop:
-  touchstone: measurements/meas_differential.s2p
+  touchstone: measurements/pid120hd-360m.s2p
   phy_load_ohm: 20000.0
 
 cable:
