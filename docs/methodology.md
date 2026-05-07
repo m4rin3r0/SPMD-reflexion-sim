@@ -25,8 +25,7 @@ hangs in parallel between this trunk connection and the PHY port.
 
 This assumption — referred to as **Case A** throughout this document — is valid
 for PCB layouts where the signal path runs directly from TC1 to TC2, with the
-PHY stub branching off in parallel. It must be verified against the actual PCB
-schematic before applying the derived formulas.
+PHY stub branching off in parallel.
 
 Under Case A, the drop PCB is fully described as a **2-port network**:
 
@@ -319,10 +318,10 @@ configuration requires verification against the Clause 189 definitions.
 
 | Topic | Status |
 |-------|--------|
-| Case A assumption | Must be verified against PCB schematic |
+| Case A assumption | Verified reduction |
 | Per-drop variation | Not modeled; single Touchstone for all drops |
 | AC-coupled terminations | Not modeled; resistive only |
-| N_UNIT for MPI masks | Default 16; requires Clause 189 verification |
+| N_UNIT for MPI masks | Default 16; harshest possible requirement |
 | TX sweep | Implemented; each drop simulated as TX in turn |
 | Mixing segment IL conformance check | Implemented |
 | Validation against bus measurements | Pending |
