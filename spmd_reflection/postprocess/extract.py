@@ -68,7 +68,7 @@ def _compute_tci_quantities(drop:DropData, phy_load_ohm:float) -> tuple[np.ndarr
     return il_tci_db, rl_tci_db
 
 
-def compute_bus_results(results:SolverResults, topology:Topology, drop:DropData, phy_load_ohm:float, il_ms_db=Optional[np.ndarray]) -> BusResults:
+def compute_bus_results(results:SolverResults, topology:Topology, tx_drop:DropData, rx_drop:DropData, phy_load_ohm:float, il_ms_db:np.ndarray) -> BusResults:
     """Extract physical quantities from solver results and drop data.
 
     Computes:
@@ -81,7 +81,7 @@ def compute_bus_results(results:SolverResults, topology:Topology, drop:DropData,
     Args:
         results: Raw solver output.
         topology: Bus topology (used to determine number of drops).
-        drop: Drop measurement data (jumped PCB, same for all drops).
+        tx_drop and rx_drop: Drop measurement data.
         phy_load_ohm: PHY input impedance (Ω).
 
     Returns:
@@ -89,16 +89,14 @@ def compute_bus_results(results:SolverResults, topology:Topology, drop:DropData,
     """
     n_drops = len(topology.drops)
     rl_db = _compute_rl(results.s11_tx)
-    rx_to_tx = _compute_rx_to_tx(results.rx_phy_voltages, results.tx_phy_voltages)
-    # TCI quantities for all drops (TX and RX alike).
-    il_tci_db_single, rl_tci_db_single = _compute_tci_quantities(drop, phy_load_ohm)
-    # All drops use the same PCB → broadcast to (n_freq, n_drops).
+    rx_to_tx_db = _compute_rx_to_tx(results.rx_phy_voltages, results.tx_phy_voltages)
+    il_tci_db_single, rl_tci_db_single = _compute_tci_quantities(rx_drop, phy_load_ohm)
     il_tci_db = np.tile(il_tci_db_single[:, np.newaxis], (1, n_drops))
     rl_tci_db = np.tile(rl_tci_db_single[:, np.newaxis], (1, n_drops))
     return BusResults(
         frequency_hz=results.frequency_hz,
         rl_db=rl_db,
-        rx_to_tx_db=rx_to_tx,
+        rx_to_tx_db=rx_to_tx_db,
         il_tci_db=il_tci_db,
         rl_tci_db=rl_tci_db,
         il_ms_db=il_ms_db)

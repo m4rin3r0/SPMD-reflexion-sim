@@ -11,7 +11,8 @@ topology:
   termination_ohm: 100.0
 
 drop:
-  touchstone: measurements/Passive_node_PID77-200_100R_Differential_P1_PHY_2P_MDI.s2p
+  tx_touchstone: measurements/Passive_node_PID77-200_100R_Differential_P1_PHY_2P_MDI.s2p
+  rx_touchstone: measurements/Passive_node_ADL32VHR-360M_100R_Differential_P1_PHY_2P_MDI.s2p
   phy_load_ohm: 20000.0
 
 cable:

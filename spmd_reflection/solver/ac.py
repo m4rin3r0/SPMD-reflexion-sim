@@ -36,15 +36,13 @@ def _stamp_two_port(y_matrix:np.ndarray, y_2port:np.ndarray, node_a:int, node_b:
     y_matrix[:, node_b, node_b] += y_2port[:, 1, 1]
 
 
-def _assemble_y_matrix_no_terminations(topology:Topology, cable_params:CableParams, drop:DropData, phy_load_ohm:float, frequency_hz:np.ndarray) -> tuple[np.ndarray,int,list[int]]:
+def _assemble_y_matrix_no_terminations(topology:Topology, cable_params:CableParams, tx_drop:DropData, rx_drop:DropData, phy_load_ohm:float, frequency_hz:np.ndarray) -> tuple[np.ndarray, int, list[int]]:
     """Assemble the global Y-matrix from topology, cable, and drop data without terminations
 
     Conceptually:
       - Trunk segments are stamped as 2-ports between their nodes.
-      - Each drop is stamped as a 2-port between its trunk node and a new
-        internal PHY node.
-      - For RX drops: the PHY load (e.g. 20 kΩ) is stamped as a shunt at the
-        RX-PHY node.
+      - Each drop is stamped as a 2-port between its trunk node and a new internal PHY node.
+      - For RX drops: the PHY load (e.g. 20 kΩ) is stamped as a shunt at the RX-PHY node.
       - For the TX drop: no shunt is added; the Norton source admittance will
         be added later in _compute_s11_and_voltages.
 
@@ -56,7 +54,7 @@ def _assemble_y_matrix_no_terminations(topology:Topology, cable_params:CablePara
     Args:
         topology: The bus topology.
         cable_params: Distributed cable parameters (per meter).
-        drop: Drop measurement data (used for both TX and all RX drops).
+        tx_drop and rx_drop: Drop measurement data 
         phy_load_ohm: PHY input impedance for RX drops (Ω).
         frequency_hz: Simulation frequency grid (Hz).
 
@@ -69,31 +67,28 @@ def _assemble_y_matrix_no_terminations(topology:Topology, cable_params:CablePara
     """
     n_freq = len(frequency_hz)
     n_topology_nodes = topology.n_nodes
-    # Identify RX drops and assign each one a fresh PHY node.
     rx_drop_indices = [i for i, d in enumerate(topology.drops) if d.role == "rx"]
     n_rx_drops = len(rx_drop_indices)
     rx_phy_nodes = list(range(n_topology_nodes, n_topology_nodes + n_rx_drops))
     tx_phy_node = n_topology_nodes + n_rx_drops
     n_total = tx_phy_node + 1
     y_matrix = np.zeros((n_freq, n_total, n_total), dtype=complex)
-    # 1. Trunk segments.
     for segment in topology.trunk_segments:
         y_seg = compute_y_params(segment.length_m, cable_params, frequency_hz)
         _stamp_two_port(y_matrix, y_seg, segment.node_a, segment.node_b)
-    # 2. Drops as 2-ports between trunk node and a PHY node.
     rx_iter = iter(rx_phy_nodes)
     for d in topology.drops:
         if d.role == "tx":
             phy_node = tx_phy_node
+            _stamp_two_port(y_matrix, tx_drop.y_params, d.trunk_node, phy_node)
         else:
             phy_node = next(rx_iter)
-            # Add the PHY load as a shunt at the RX-PHY node.
             y_matrix[:, phy_node, phy_node] += 1.0 / phy_load_ohm
-        _stamp_two_port(y_matrix, drop.y_params, d.trunk_node, phy_node)
+            _stamp_two_port(y_matrix, rx_drop.y_params, d.trunk_node, phy_node)
     return y_matrix, tx_phy_node, rx_phy_nodes
 
 
-def _assemble_y_matrix(topology:Topology, cable_params:CableParams, drop:DropData, phy_load_ohm:float, frequency_hz:np.ndarray) -> tuple[np.ndarray, int, list[int]]:
+def _assemble_y_matrix(topology:Topology, cable_params:CableParams, tx_drop:DropData, rx_drop:DropData, phy_load_ohm:float, frequency_hz:np.ndarray) -> tuple[np.ndarray, int, list[int]]:
     """Assemble the global Y-matrix including edge terminations
     
     Conceptually:
@@ -103,7 +98,7 @@ def _assemble_y_matrix(topology:Topology, cable_params:CableParams, drop:DropDat
     Args:
         topology: The bus topology.
         cable_params: Distributed cable parameters (per meter).
-        drop: Drop measurement data (used for both TX and all RX drops).
+        tx_drop and rx_drop: Drop measurement data 
         phy_load_ohm: PHY input impedance for RX drops (Ω).
         frequency_hz: Simulation frequency grid (Hz).
 
@@ -114,8 +109,7 @@ def _assemble_y_matrix(topology:Topology, cable_params:CableParams, drop:DropDat
             rx_phy_nodes: Indices of the RX-PHY nodes, in the order of the
                 RX drops as they appear in topology.drops.
     """
-    y_matrix, tx_phy_node, rx_phy_nodes = _assemble_y_matrix_no_terminations(topology, cable_params, drop, phy_load_ohm, frequency_hz)
-    # Add edge terminations.
+    y_matrix, tx_phy_node, rx_phy_nodes = _assemble_y_matrix_no_terminations(topology, cable_params, tx_drop, rx_drop, phy_load_ohm, frequency_hz)
     for termination in topology.terminations:
         y_termination = 1.0 / termination.impedance_ohm
         y_matrix[:, termination.node, termination.node] += y_termination
@@ -178,7 +172,7 @@ def _compute_s11_and_voltages(y_matrix:np.ndarray, tx_phy_node:int, rx_phy_nodes
     return s11, node_voltages, rx_phy_voltages, tx_phy_voltages
 
 
-def _validate_inputs(topology:Topology, drop:DropData, frequency_hz:np.ndarray) -> None:
+def _validate_inputs(topology:Topology, tx_drop:DropData, rx_drop:DropData, frequency_hz:np.ndarray) -> None:
     """Validate that all inputs are consistent with each other.
 
     Checks:
@@ -188,14 +182,16 @@ def _validate_inputs(topology:Topology, drop:DropData, frequency_hz:np.ndarray) 
     Raises:
         ValueError: On any inconsistency.
     """
-    if not np.array_equal(drop.frequency_hz, frequency_hz):
-        raise ValueError("drop.frequency_hz does not match the simulation frequency grid")
+    if not np.array_equal(tx_drop.frequency_hz, frequency_hz):
+        raise ValueError("tx_drop.frequency_hz does not match the simulation frequency grid")
+    if not np.array_equal(rx_drop.frequency_hz, frequency_hz):
+        raise ValueError("rx_drop.frequency_hz does not match the simulation frequency grid")
     tx_count = sum(1 for d in topology.drops if d.role == "tx")
     if tx_count != 1:
         raise ValueError(f"topology must have exactly one TX drop, found {tx_count}")
 
 
-def run_simulation(topology:Topology, cable_params:CableParams, drop:DropData, phy_load_ohm:float, frequency_hz:np.ndarray) -> SolverResults:
+def run_simulation(topology:Topology, cable_params:CableParams, tx_drop:DropData, rx_drop:DropData, phy_load_ohm:float, frequency_hz:np.ndarray) -> SolverResults:
     """Run the AC simulation for one TX-RX configuration.
 
     Args:
@@ -209,8 +205,8 @@ def run_simulation(topology:Topology, cable_params:CableParams, drop:DropData, p
         SolverResults with S11 at the TX source port, node voltages at all
         topology nodes, and RX-PHY voltages at each RX drop's PHY port.
     """
-    _validate_inputs(topology, drop, frequency_hz)
-    y_matrix, tx_phy_node, rx_phy_nodes = _assemble_y_matrix(topology, cable_params, drop, phy_load_ohm, frequency_hz)
+    _validate_inputs(topology, tx_drop, rx_drop, frequency_hz)
+    y_matrix, tx_phy_node, rx_phy_nodes = _assemble_y_matrix(topology, cable_params, tx_drop, rx_drop, phy_load_ohm, frequency_hz)
     s11, node_voltages, rx_phy_voltages, tx_phy_voltages = _compute_s11_and_voltages(y_matrix, tx_phy_node, rx_phy_nodes, topology.n_nodes)
     return SolverResults(
         frequency_hz=frequency_hz,
@@ -220,7 +216,7 @@ def run_simulation(topology:Topology, cable_params:CableParams, drop:DropData, p
         tx_phy_voltages=tx_phy_voltages)
 
 
-def run_mixing_segment_simulation(topology:Topology, cable_params:CableParams, drop:DropData, phy_load_ohm:float, frequency_hz:np.ndarray) -> np.ndarray:
+def run_mixing_segment_simulation(topology:Topology, cable_params:CableParams, rx_drop:DropData, phy_load_ohm:float, frequency_hz:np.ndarray) -> np.ndarray:
     """Compute mixing segment IL per IEEE 802.3da 188.8.1.
 
     Places a Norton source at the left bus-end node and measure the voltage at the right bus-end node. The edge terminations are replaced
@@ -229,37 +225,32 @@ def run_mixing_segment_simulation(topology:Topology, cable_params:CableParams, d
     Args:
         topology: Bus topology.
         cable_params: Distributed cable parameters.
-        drop: Drop measurement data.
+        rx_drop: Drop measurement data.
         phy_load_ohm: PHY input impedance for RX drops (Ω).
         frequency_hz: Simulation frequency grid (Hz).
 
     Returns:
         ms_il_db: shape (n_freq,), mixing segment IL in dB. Positive = loss.
-    """
+    """    
     n_freq = len(frequency_hz)
-    # Identify bus-end nodes from terminations.
-    left_node  = min(t.node for t in topology.terminations)
+    left_node = min(t.node for t in topology.terminations)
     right_node = max(t.node for t in topology.terminations)
-    # Build Y-matrix WITHOUT edge terminations (they are replaced by probes).
-    y_matrix, _, rx_phy_nodes = _assemble_y_matrix_no_terminations(topology, cable_params, drop, phy_load_ohm, frequency_hz)
-    ysrc  = 1.0 / Z0_REFERENCE
+    # Using the rx-drop-data for tx because there is no Norton Source at tx in this simulation 
+    y_matrix, _, rx_phy_nodes = _assemble_y_matrix_no_terminations(topology, cable_params, rx_drop, rx_drop, phy_load_ohm, frequency_hz)
+    ysrc = 1.0 / Z0_REFERENCE
     yload = 1.0 / Z0_REFERENCE
     ms_il_db = np.empty(n_freq)
     for freq_idx in range(n_freq):
         y_total = y_matrix[freq_idx].copy()
-        # Source impedance at left node.
         y_total[left_node, left_node] += ysrc
-        # Load impedance at right node.
         y_total[right_node, right_node] += yload
-        # Norton current at left node.
         i_vec = np.zeros(y_total.shape[0], dtype=complex)
         i_vec[left_node] = ysrc
         v = np.linalg.solve(y_total, i_vec)
-        # S21 between left and right node.
         v_source = v[left_node]
-        v_load   = v[right_node]
+        v_load = v[right_node]
         i_source = ysrc - ysrc * v_source
         a1 = v_source + i_source * Z0_REFERENCE
-        s21 = 2.0 * v_load / a1   # S21 = 2*V_load / a1 for matched load
+        s21 = 2.0 * v_load / a1
         ms_il_db[freq_idx] = -20.0 * np.log10(np.abs(s21))
     return ms_il_db

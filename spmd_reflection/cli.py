@@ -36,26 +36,29 @@ def run(config_path:Path) -> BusResults:
         tx_drop_index=config.topology.tx_drop_index,
         termination_ohm=config.topology.termination_ohm)
 
-    drop = load_drop(config.drop.touchstone, frequency_hz)
+    tx_drop = load_drop(config.drop.tx_touchstone, frequency_hz)
+    rx_drop = load_drop(config.drop.rx_touchstone, frequency_hz)
 
     solver_results = run_simulation(
         topology=topology,
         cable_params=config.cable,
-        drop=drop,
+        tx_drop=tx_drop,
+        rx_drop=rx_drop,
         phy_load_ohm=config.drop.phy_load_ohm,
         frequency_hz=frequency_hz)
     
     il_ms_db = run_mixing_segment_simulation(
         topology=topology,
         cable_params=config.cable,
-        drop=drop,
+        rx_drop=rx_drop,
         phy_load_ohm=config.drop.phy_load_ohm,
         frequency_hz=frequency_hz)
 
     return compute_bus_results(
         results=solver_results,
         topology=topology,
-        drop=drop,
+        tx_drop=tx_drop,
+        rx_drop=rx_drop,
         phy_load_ohm=config.drop.phy_load_ohm,
         il_ms_db=il_ms_db)
 
@@ -74,7 +77,8 @@ def run_tx_sweep(config_path:Path) -> list[BusResults]:
         config.frequency.stop_hz,
         config.frequency.n_points)
 
-    drop = load_drop(config.drop.touchstone, frequency_hz)
+    tx_drop = load_drop(config.drop.tx_touchstone, frequency_hz)
+    rx_drop = load_drop(config.drop.rx_touchstone, frequency_hz)
     n_drops = len(config.topology.drop_positions_m)
     sweep_results = []
 
@@ -85,27 +89,29 @@ def run_tx_sweep(config_path:Path) -> list[BusResults]:
             bus_end_m=config.topology.bus_end_m,
             tx_drop_index=tx_index,
             termination_ohm=config.topology.termination_ohm,)
-
+        
         solver_results = run_simulation(
             topology=topology,
             cable_params=config.cable,
-            drop=drop,
+            tx_drop=tx_drop,
+            rx_drop=rx_drop,
             phy_load_ohm=config.drop.phy_load_ohm,
             frequency_hz=frequency_hz)
 
-        ms_il_db = run_mixing_segment_simulation(
+        il_ms_db = run_mixing_segment_simulation(
             topology=topology,
             cable_params=config.cable,
-            drop=drop,
+            rx_drop=rx_drop,
             phy_load_ohm=config.drop.phy_load_ohm,
             frequency_hz=frequency_hz)
 
         bus_results = compute_bus_results(
             results=solver_results,
             topology=topology,
-            drop=drop,
+            tx_drop=tx_drop,
+            rx_drop=rx_drop,
             phy_load_ohm=config.drop.phy_load_ohm,
-            il_ms_db=ms_il_db)
+            il_ms_db=il_ms_db)
 
         sweep_results.append(bus_results)
 

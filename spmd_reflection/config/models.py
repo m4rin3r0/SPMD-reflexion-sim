@@ -33,17 +33,18 @@ class TopologyConfig:
 class DropConfig:
     """Drop configuration: PCB measurement file and PHY input impedance.
     
-    The touchstone file is expected to be a jumped measurement (PHY load
-    bypassed), so that the file describes only the passive PCB.
+    The touchstone files are expected to describe only the passive PCB.
     The PHY load is connected externally by the solver (Norton source for TX,
     resistor for RX).
     
     Attributes:
-        touchstone: Path to the drop's .s2p file (jumped measurement).
+        tx_touchstone: Path to the TX drop's .s2p file.
+        rx_touchstone: Path to the RX drop's .s2p file.
         phy_load_ohm: PHY input impedance to be connected at the PHY-side port
             of RX drops. Default is 20 kΩ, matching typical 10BASE-T1 PHY chips.
     """
-    touchstone: Path
+    tx_touchstone: Path
+    rx_touchstone: Path
     phy_load_ohm: float
 
 
