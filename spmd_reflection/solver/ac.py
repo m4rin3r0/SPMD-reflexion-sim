@@ -15,7 +15,7 @@ from spmd_reflection.solver.model import SolverResults
 from spmd_reflection.topology.models import Topology
 
 
-Z0_REFERENCE = 100.0
+Z0_REFERENCE = 50.0
 
 def _stamp_two_port(y_matrix:np.ndarray, y_2port:np.ndarray, node_a:int, node_b:int) -> None:
     """Stamp a 2-port Y-matrix into the global nodal admittance matrix.
