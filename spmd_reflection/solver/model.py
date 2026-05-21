@@ -20,8 +20,10 @@ class SolverResults:
             they appear in topology.drops (excluding the TX drop).
             These voltages represent the signal level reaching each RX PHY,
             which is the basis for insertion loss calculations.
+        tx_phy_voltages: Voltage at the TX drop per frequency
     """
     frequency_hz: np.ndarray
     s11_tx: np.ndarray
     node_voltages: np.ndarray
     rx_phy_voltages: np.ndarray
+    tx_phy_voltages: np.ndarray

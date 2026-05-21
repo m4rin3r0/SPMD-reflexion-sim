@@ -83,8 +83,8 @@ def test_rl_is_6db_for_half_reflection():
     assert np.allclose(bus.rl_db, expected_rl, atol=1e-10)
 
 
-def test_il_phy_is_zero_db_at_matched_source_voltage():
-    """V_rx_phy = 0.5 V (matched) -> IL_PHY = 0 dB"""
+def test_rx_to_tx_is_zero_db_at_matched_source_voltage():
+    """V_rx_phy = 0.5 V (matched) -> RX/TX = 0 dB"""
     freqs = _default_frequency_grid()
     n_freq = len(freqs)
     # one RX-Drop, voltage exactly 0.5 V (= matched source voltage).
@@ -98,13 +98,13 @@ def test_il_phy_is_zero_db_at_matched_source_voltage():
         termination_ohm=100.0)
     drop = _make_drop_with_admittance(freqs, y_trunk=0.0)
     bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0)
-    # IL_PHY = -20*log10(0.5 / 0.5) = 0 dB.
-    assert bus.il_phy_db.shape == (n_freq, 1)
-    assert np.allclose(bus.il_phy_db, 0.0, atol=1e-10)
+    # RX/TX = -20*log10(0.5 / 0.5) = 0 dB.
+    assert bus.rx_to_tx_db.shape == (n_freq, 1)
+    assert np.allclose(bus.rx_to_tx_db, 0.0, atol=1e-10)
 
 
-def test_il_phy_is_positive_for_attenuated_signal():
-    """V_rx_phy < 0.5 V -> IL_PHY > 0 dB"""
+def test_rx_to_tx_is_positive_for_attenuated_signal():
+    """V_rx_phy < 0.5 V -> RX/TX > 0 dB"""
     freqs = _default_frequency_grid()
     n_freq = len(freqs)
     # 2 RX-Drops with different dampings
@@ -122,14 +122,14 @@ def test_il_phy_is_positive_for_attenuated_signal():
         termination_ohm=100.0)
     drop = _make_drop_with_admittance(freqs, y_trunk=0.0)
     bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0)
-    # IL_PHY > 0 for both Drops (voltage under matched source voltage)
-    assert np.all(bus.il_phy_db > 0)
+    # RX/TX > 0 for both Drops (voltage under matched source voltage)
+    assert np.all(bus.rx_to_tx_db > 0)
     # more damping -> higher IL
     expected_il_near = -20.0 * np.log10(v_near / 0.5)
     expected_il_far  = -20.0 * np.log10(v_far  / 0.5)
-    assert np.allclose(bus.il_phy_db[:, 0], expected_il_near, atol=1e-10)
-    assert np.allclose(bus.il_phy_db[:, 1], expected_il_far,  atol=1e-10)
-    assert np.all(bus.il_phy_db[:, 1] > bus.il_phy_db[:, 0])
+    assert np.allclose(bus.rx_to_tx_db[:, 0], expected_il_near, atol=1e-10)
+    assert np.allclose(bus.rx_to_tx_db[:, 1], expected_il_far,  atol=1e-10)
+    assert np.all(bus.rx_to_tx_db[:, 1] > bus.rx_to_tx_db[:, 0])
 
 
 def test_il_tci_is_zero_db_for_invisible_drop():
@@ -241,7 +241,7 @@ def test_bus_results_all_shapes_correct():
     assert isinstance(bus, BusResults)
     assert bus.frequency_hz.shape == (n_freq,)
     assert bus.rl_db.shape == (n_freq,)
-    assert bus.il_phy_db.shape == (n_freq, n_rx_drops)
+    assert bus.rx_to_tx_db.shape == (n_freq, n_rx_drops)
     assert bus.il_tci_db.shape == (n_freq, n_drops)
     assert bus.rl_tci_db.shape == (n_freq, n_drops)
     assert bus.il_ms_db.shape == (n_freq,)
@@ -274,11 +274,11 @@ def test_smoke_with_real_solver_output():
         frequency_hz=freqs)
     bus = compute_bus_results(solver_results, topology, drop, phy_load_ohm)
     assert np.all(np.isfinite(bus.rl_db))
-    assert np.all(np.isfinite(bus.il_phy_db))
+    assert np.all(np.isfinite(bus.rx_to_tx_db))
     assert np.all(np.isfinite(bus.il_tci_db))
     assert np.all(np.isfinite(bus.rl_tci_db))
     # Physical plausibility.
     assert np.all(bus.rl_db >= 0)
-    assert np.all(bus.il_phy_db >= 0)
+    assert np.all(bus.rx_to_tx_db >= 0)
     assert np.all(bus.il_tci_db >= 0)
     assert np.all(bus.rl_tci_db >= 0)

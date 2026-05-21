@@ -107,7 +107,7 @@ from spmd_reflection.cli import run
 results = run(Path("config.yaml"))
 
 # results.rl_db            – Bus RL at TX port,     shape (n_freq,)
-# results.il_phy_db        – IL at RX PHY ports,    shape (n_freq, n_rx_drops)
+# results.rx_to_tx_db        – RX/TX at RX PHY ports,    shape (n_freq, n_rx_drops)
 # results.il_tci_db        – TCI IL per drop,        shape (n_freq, n_drops)
 # results.rl_tci_db        – TCI RL per drop,        shape (n_freq, n_drops)
 # results.ms_il_db         – Mixing segment IL,      shape (n_freq,)

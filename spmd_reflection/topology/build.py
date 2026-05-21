@@ -53,8 +53,7 @@ def build_topology(drop_positions_m:list[float], bus_start_m:float, bus_end_m:fl
         termination_ohm: Impedance of both edge terminations.
 
     Returns:
-        A Topology describing the bus graph: nodes, segments, drops,
-        terminations.
+        A Topology describing the bus graph: nodes, segments, drops, terminations.
 
     Raises:
         ValueError: If any input violates the constraints.

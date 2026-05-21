@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 from typing import Optional
-
 import numpy as np
 
 from spmd_reflection.drop.models import DropData
@@ -10,11 +9,7 @@ from spmd_reflection.postprocess.models import BusResults
 from spmd_reflection.solver.model import SolverResults
 from spmd_reflection.topology.models import Topology
 
-# Reference impedance for the simulation (differential).
 Z0_REFERENCE = 100.0
-
-# PHY load for TCI calculations (matched source voltage normalization).
-_MATCHED_SOURCE_VOLTAGE = 0.5
 
 
 def _compute_drop_admittance(drop:DropData, phy_load_ohm:float) -> np.ndarray:
@@ -46,11 +41,11 @@ def _compute_rl(s11_tx:np.ndarray) -> np.ndarray:
     return -20.0 * np.log10(np.abs(s11_tx))
 
 
-def _compute_il_phy(rx_phy_voltages:np.ndarray) -> np.ndarray:
-    """IL at each RX PHY port, normalized to matched source voltage
-    IL_PHY = -20*log10(|V_rx_phy| / 0.5). Shape (n_freq, n_rx_drops)
+def _compute_rx_to_tx(rx_phy_voltages:np.ndarray, tx_phy_voltages:np.ndarray) -> np.ndarray:
+    """RX/TX at each RX PHY port, normalized to matched source voltage
+        RX/TX = -20*log10(|V_rx_phy| / |V_tx_phy|). Shape (n_freq, n_rx_drops)
     """
-    return -20.0 * np.log10(np.abs(rx_phy_voltages) / _MATCHED_SOURCE_VOLTAGE)
+    return -20.0 * np.log10(np.abs(rx_phy_voltages) / np.abs(np.expand_dims(tx_phy_voltages, axis=1)))
 
 
 def _compute_tci_quantities(drop:DropData, phy_load_ohm:float) -> tuple[np.ndarray, np.ndarray]:
@@ -78,7 +73,7 @@ def compute_bus_results(results:SolverResults, topology:Topology, drop:DropData,
 
     Computes:
       - RL at TX port (from S11)
-      - IL_PHY at each RX PHY port (from rx_phy_voltages)
+      - RX/TX at each RX PHY port (from rx_phy_voltages)
       - IL_TCI and RL_TCI for all drops (from drop Y-parameters)
 
     Mixing segment IL (ms_il_db) is not yet implemented and is set to None.
@@ -94,7 +89,7 @@ def compute_bus_results(results:SolverResults, topology:Topology, drop:DropData,
     """
     n_drops = len(topology.drops)
     rl_db = _compute_rl(results.s11_tx)
-    il_phy_db = _compute_il_phy(results.rx_phy_voltages)
+    rx_to_tx = _compute_rx_to_tx(results.rx_phy_voltages, results.tx_phy_voltages)
     # TCI quantities for all drops (TX and RX alike).
     il_tci_db_single, rl_tci_db_single = _compute_tci_quantities(drop, phy_load_ohm)
     # All drops use the same PCB → broadcast to (n_freq, n_drops).
@@ -103,7 +98,7 @@ def compute_bus_results(results:SolverResults, topology:Topology, drop:DropData,
     return BusResults(
         frequency_hz=results.frequency_hz,
         rl_db=rl_db,
-        il_phy_db=il_phy_db,
+        rx_to_tx_db=rx_to_tx,
         il_tci_db=il_tci_db,
         rl_tci_db=rl_tci_db,
         il_ms_db=il_ms_db)

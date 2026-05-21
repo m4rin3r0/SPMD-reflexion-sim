@@ -20,7 +20,7 @@ def run(config_path:Path) -> BusResults:
         config_path: Path to the YAML config file.
 
     Returns:
-        BusResults with RL, IL_PHY, IL_TCI, RL_TCI for the configured bus.
+        BusResults with RL, RX/TX, IL_TCI, RL_TCI for the configured bus.
     """
     config = load_config(Path(config_path))
 

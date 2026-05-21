@@ -122,7 +122,7 @@ def _assemble_y_matrix(topology:Topology, cable_params:CableParams, drop:DropDat
     return y_matrix, tx_phy_node, rx_phy_nodes
 
 
-def _compute_s11_and_voltages(y_matrix:np.ndarray, tx_phy_node:int, rx_phy_nodes:list[int], n_topology_nodes:int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _compute_s11_and_voltages(y_matrix:np.ndarray, tx_phy_node:int, rx_phy_nodes:list[int], n_topology_nodes:int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Solve the nodal system with a Norton source at the TX-PHY node.
 
     For each frequency:
@@ -174,7 +174,8 @@ def _compute_s11_and_voltages(y_matrix:np.ndarray, tx_phy_node:int, rx_phy_nodes
     rx_phy_voltages = np.empty((n_freq, n_rx), dtype=complex)
     for rx_idx, phy_node in enumerate(rx_phy_nodes):
         rx_phy_voltages[:, rx_idx] = all_voltages[:, phy_node]
-    return s11, node_voltages, rx_phy_voltages
+    tx_phy_voltages = all_voltages[:, tx_phy_node]
+    return s11, node_voltages, rx_phy_voltages, tx_phy_voltages
 
 
 def _validate_inputs(topology:Topology, drop:DropData, frequency_hz:np.ndarray) -> None:
@@ -210,12 +211,13 @@ def run_simulation(topology:Topology, cable_params:CableParams, drop:DropData, p
     """
     _validate_inputs(topology, drop, frequency_hz)
     y_matrix, tx_phy_node, rx_phy_nodes = _assemble_y_matrix(topology, cable_params, drop, phy_load_ohm, frequency_hz)
-    s11, node_voltages, rx_phy_voltages = _compute_s11_and_voltages(y_matrix, tx_phy_node, rx_phy_nodes, topology.n_nodes)
+    s11, node_voltages, rx_phy_voltages, tx_phy_voltages = _compute_s11_and_voltages(y_matrix, tx_phy_node, rx_phy_nodes, topology.n_nodes)
     return SolverResults(
         frequency_hz=frequency_hz,
         s11_tx=s11,
         node_voltages=node_voltages,
-        rx_phy_voltages=rx_phy_voltages)
+        rx_phy_voltages=rx_phy_voltages,
+        tx_phy_voltages=tx_phy_voltages)
 
 
 def run_mixing_segment_simulation(topology:Topology, cable_params:CableParams, drop:DropData, phy_load_ohm:float, frequency_hz:np.ndarray) -> np.ndarray:

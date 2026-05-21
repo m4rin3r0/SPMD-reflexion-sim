@@ -152,7 +152,7 @@ A higher RL value indicates less reflected energy, i.e., better impedance matchi
 
 ---
 
-## 4. PHY Insertion Loss (IL_PHY)
+## 4. PHY RX/TX (RX/TX)
 
 The **PHY insertion loss** quantifies how much signal reaches the PHY of each
 RX drop relative to the available source power.
@@ -170,7 +170,7 @@ $$\text{IL}_\text{PHY,i}(f) = -20 \log_{10}\left(\frac{|V_\text{rx,i}|}{0.5}\rig
 A value of 0 dB means the RX PHY receives the same power as a directly connected
 matched load. Positive values indicate signal loss.
 
-**Note:** IL_PHY is a system-level quantity that captures the combined effect of
+**Note:** RX/TX is a system-level quantity that captures the combined effect of
 cable losses, reflections from all drops, and the impedance loading of the PHY
 input. It is not directly specified by IEEE 802.3da but is the most practically
 relevant figure of merit for receiver signal quality.

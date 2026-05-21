@@ -13,8 +13,8 @@ class BusResults:
         frequency_hz: 1D array of frequency points (Hz).
         rl_db: Return loss at the TX port. Shape (n_freq,).
             RL = -20*log10(|S11_tx|). Positive = more attenuation of reflection.
-        il_phy_db: Insertion loss at each RX PHY port. Shape (n_freq, n_rx_drops).
-            IL_PHY = -20*log10(|V_rx_phy| / 0.5). Positive = signal loss.
+        rx_to_tx_db: Ratio of RX Voltage to TX voltage at each RX PHY port. Shape (n_freq, n_rx_drops).
+            RX/TX = -20*log10(|V_rx_phy| / 0.5). Positive = signal loss.
             Normalized to matched source voltage (0.5 V for 1 V source into Z0).
         il_tci_db: TCI insertion loss per drop. Shape (n_freq, n_rx_drops).
             IL_TCI = -20*log10(|S21_TCI|). Positive = signal loss.
@@ -28,7 +28,7 @@ class BusResults:
     """
     frequency_hz: np.ndarray
     rl_db: np.ndarray
-    il_phy_db: np.ndarray
+    rx_to_tx_db: np.ndarray
     il_tci_db: np.ndarray
     rl_tci_db: np.ndarray
     il_ms_db: np.ndarray | None
