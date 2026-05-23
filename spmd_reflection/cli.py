@@ -13,7 +13,7 @@ from spmd_reflection.solver.ac import run_mixing_segment_simulation, run_simulat
 from spmd_reflection.topology.build import build_topology
 
 
-def run(config_path:Path) -> BusResults:
+def run(config_path:Path) -> tuple[BusResults,np.ndarray,np.ndarray]:
     """Run the full simulation pipeline from config file to postprocessed results.
 
     Args:
@@ -54,13 +54,7 @@ def run(config_path:Path) -> BusResults:
         phy_load_ohm=config.drop.phy_load_ohm,
         frequency_hz=frequency_hz)
 
-    return compute_bus_results(
-        results=solver_results,
-        topology=topology,
-        tx_drop=tx_drop,
-        rx_drop=rx_drop,
-        phy_load_ohm=config.drop.phy_load_ohm,
-        il_ms_db=il_ms_db)
+    return compute_bus_results(results=solver_results, topology=topology, tx_drop=tx_drop, rx_drop=rx_drop, phy_load_ohm=config.drop.phy_load_ohm, il_ms_db=il_ms_db), solver_results.tx_phy_voltages, solver_results.rx_phy_voltages
 
 
 def run_tx_sweep(config_path:Path) -> list[BusResults]:
