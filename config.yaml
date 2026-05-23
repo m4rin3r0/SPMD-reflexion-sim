@@ -4,7 +4,7 @@ frequency:
   n_points: 1001
 
 topology:
-  drop_positions_m: [0.0, 4.0, 8.0]
+  drop_positions_m: [0.5, 4.0, 7.5]
   bus_start_m: 0.0
   bus_end_m: 8.0
   tx_drop_index: 0

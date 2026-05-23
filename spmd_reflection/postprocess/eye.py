@@ -103,7 +103,7 @@ def _transfer_function_to_impulse_response(h_freq:np.ndarray, n_freq_original:in
     return h_t
 
 
-def compute_eye_diagram(tx_voltage:np.ndarray, rx_voltage:np.ndarray, frequency_hz:np.ndarray, n_symbols:int=2000, samples_per_symbol:int=DEFAULT_SAMPLES_PER_SYMBOL, symbol_rate:float=SYMBOL_RATE_BAUD, seed:int=42) -> EyeDiagramData:
+def compute_eye_diagram(tx_voltage:np.ndarray, rx_voltage:np.ndarray, frequency_hz:np.ndarray, n_symbols:int=2000, samples_per_symbol:int=DEFAULT_SAMPLES_PER_SYMBOL, symbol_rate:float=SYMBOL_RATE_BAUD, seed:int=42, snr_db:float=20.0, jitter_fraction:float=0.02) -> EyeDiagramData:
     """Compute eye diagram data from TX and RX voltages.
 
     Steps:
@@ -132,23 +132,26 @@ def compute_eye_diagram(tx_voltage:np.ndarray, rx_voltage:np.ndarray, frequency_
     rng = np.random.default_rng(seed)
     tx_signal = _generate_pam3_signal(n_symbols, samples_per_symbol, rng)
     rx_signal = np.convolve(tx_signal, h_t, mode="full")
+    # Adding noise
+    signal_power = np.mean(rx_signal**2)
+    noise_power = signal_power / (10**(snr_db / 10))
+    noise = rng.normal(0, np.sqrt(noise_power), len(rx_signal))
+    rx_signal = rx_signal + noise
     segment_length = 2 * samples_per_symbol
-    n_segments = (len(rx_signal) - segment_length) // samples_per_symbol
-    # Skip first 10 symbols to avoid transient effects.
     start_offset = 10 * samples_per_symbol
+    # Jitter:
+    jitter_samples = int(jitter_fraction * samples_per_symbol)
     segments = []
-    for i in range(n_segments):
-        start = start_offset + i * samples_per_symbol
+    for i in range((len(rx_signal) - start_offset - segment_length) // samples_per_symbol):
+        jitter = rng.integers(-jitter_samples, jitter_samples + 1) if jitter_samples > 0 else 0
+        start = start_offset + i * samples_per_symbol + jitter
         end = start + segment_length
-        if end > len(rx_signal):
-            break
+        if start < 0 or end > len(rx_signal):
+            continue
         segments.append(rx_signal[start:end])
     segments = np.array(segments)
     time_s = np.linspace(0, 2 * symbol_period, segment_length, endpoint=False)
-    return EyeDiagramData(
-        time_s=time_s,
-        segments=segments,
-        symbol_period_s=symbol_period)
+    return EyeDiagramData(time_s=time_s, segments=segments, symbol_period_s=symbol_period)
 
 
 def plot_eye_diagram(eye:EyeDiagramData, ax=None, title:str="Eye Diagram", color:str="blue", alpha:float=0.03):
