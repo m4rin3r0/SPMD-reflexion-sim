@@ -24,8 +24,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-# 10BASE-T1M symbol rate (PAM3).
-SYMBOL_RATE_BAUD = 7.5e6
+# 10BASE-T1M symbol rate
+SYMBOL_RATE_BAUD = 12.5e6
 
 # Default oversampling factor (samples per symbol in the time domain).
 DEFAULT_SAMPLES_PER_SYMBOL = 16
@@ -46,21 +46,21 @@ class EyeDiagramData:
     symbol_period_s: float
 
 
-def _generate_pam3_signal(n_symbols:int, samples_per_symbol:int, rng:np.random.Generator) -> np.ndarray:
-    """Generate a random PAM3 baseband signal.
+def _generate_baseband_signal(n_symbols:int, samples_per_symbol:int, rng:np.random.Generator) -> np.ndarray:
+    """Generate a random binary baseband signal.
 
-    Each symbol is one of {-1, 0, +1}, held for samples_per_symbol samples
-    (rectangular pulse shaping).
+    Each symbol is one of {-1, +1}, held for samples_per_symbol samples
+    (rectangular pulse shaping).    
 
     Args:
-        n_symbols: Number of PAM3 symbols to generate.
+        n_symbols: Number of symbols to generate.
         samples_per_symbol: Oversampling factor.
         rng: NumPy random generator for reproducibility.
 
     Returns:
         1D array of length n_symbols * samples_per_symbol.
     """
-    symbols = rng.choice([-1.0, 0.0, 1.0], size=n_symbols)
+    symbols = rng.choice([-1.0, 1.0], size=n_symbols)
     return np.repeat(symbols, samples_per_symbol)
 
 
@@ -130,7 +130,7 @@ def compute_eye_diagram(tx_voltage:np.ndarray, rx_voltage:np.ndarray, frequency_
     h_freq = _compute_transfer_function(tx_voltage, rx_voltage)
     h_t = _transfer_function_to_impulse_response(h_freq, len(frequency_hz), fs)
     rng = np.random.default_rng(seed)
-    tx_signal = _generate_pam3_signal(n_symbols, samples_per_symbol, rng)
+    tx_signal = _generate_baseband_signal(n_symbols, samples_per_symbol, rng)
     rx_signal = np.convolve(tx_signal, h_t, mode="full")
     # Adding noise
     signal_power = np.mean(rx_signal**2)
