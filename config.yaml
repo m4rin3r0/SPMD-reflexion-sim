@@ -4,15 +4,16 @@ frequency:
   n_points: 1001
 
 topology:
-  drop_positions_m: [0.5, 4.0, 7.5]
-  bus_start_m: 0.0
-  bus_end_m: 8.0
-  tx_drop_index: 0
-  termination_ohm: 100.0
+drop_positions_m: [0.1, 2.0, 3.0, 5.0, 7.0]
+bus_start_m: 0.0
+bus_end_m: 7.0
+tx_drop_index: 0
+termination_ohm: 100.0
 
 drop:
-  tx_touchstone: measurements/Passive_node_PID77-360_100R_Differential_P1_PHY_2P_MDI.s2p
-  rx_touchstone: measurements/Passive_node_ADL32VHR-360M_100R_Differential_P1_PHY_2P_MDI.s2p
+  mpse_touchstone: examples/mpse_drop.s2p
+  mpd_touchstone: examples/mpd_drop.s2p
+  mpse_index: 0
   phy_load_ohm: 20000.0
 
 cable:
