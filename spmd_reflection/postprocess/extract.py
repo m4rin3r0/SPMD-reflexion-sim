@@ -68,7 +68,7 @@ def _compute_tci_quantities(drop:DropData, phy_load_ohm:float) -> tuple[np.ndarr
     return il_tci_db, rl_tci_db
 
 
-def compute_bus_results(results:SolverResults, topology:Topology, tx_drop:DropData, rx_drop:DropData, phy_load_ohm:float, il_ms_db:np.ndarray) -> BusResults:
+def compute_bus_results(results:SolverResults, topology:Topology, mpse_drop:DropData, mpd_drop:DropData, mpse_index:int, phy_load_ohm:float, il_ms_db:np.ndarray) -> BusResults:
     """Extract physical quantities from solver results and drop data.
 
     Computes:
@@ -81,18 +81,23 @@ def compute_bus_results(results:SolverResults, topology:Topology, tx_drop:DropDa
     Args:
         results: Raw solver output.
         topology: Bus topology (used to determine number of drops).
-        tx_drop and rx_drop: Drop measurement data.
+        mpse_drop and mpd_drop: Drop measurement data.
         phy_load_ohm: PHY input impedance (Ω).
 
     Returns:
         BusResults with all computed quantities.
     """
     n_drops = len(topology.drops)
+    n_freq = len(results.frequency_hz)
     rl_db = _compute_rl(results.s11_tx)
     rx_to_tx_db = _compute_rx_to_tx(results.rx_phy_voltages, results.tx_phy_voltages)
-    il_tci_db_single, rl_tci_db_single = _compute_tci_quantities(rx_drop, phy_load_ohm)
-    il_tci_db = np.tile(il_tci_db_single[:, np.newaxis], (1, n_drops))
-    rl_tci_db = np.tile(rl_tci_db_single[:, np.newaxis], (1, n_drops))
+    il_tci_db = np.empty((n_freq, n_drops))
+    rl_tci_db = np.empty((n_freq, n_drops))
+    for drop_idx in range(n_drops):
+        drop_data = mpse_drop if drop_idx == mpse_index else mpd_drop
+        il_single, rl_single = _compute_tci_quantities(drop_data, phy_load_ohm)
+        il_tci_db[:, drop_idx] = il_single
+        rl_tci_db[:, drop_idx] = rl_single
     return BusResults(
         frequency_hz=results.frequency_hz,
         rl_db=rl_db,

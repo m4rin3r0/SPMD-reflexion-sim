@@ -38,13 +38,15 @@ class DropConfig:
     resistor for RX).
     
     Attributes:
-        tx_touchstone: Path to the TX drop's .s2p file.
-        rx_touchstone: Path to the RX drop's .s2p file.
+        mpse_touchstone: Path to the MPSE drop's .s2p file.
+        mpd_touchstone: Path to the MPD drop's .s2p file.
+        mpse_index: position of the MPSE drop in the topology
         phy_load_ohm: PHY input impedance to be connected at the PHY-side port
             of RX drops. Default is 20 kΩ, matching typical 10BASE-T1 PHY chips.
     """
-    tx_touchstone: Path
-    rx_touchstone: Path
+    mpse_touchstone: Path
+    mpd_touchstone: Path
+    mpse_index: int
     phy_load_ohm: float
 
 

@@ -66,21 +66,23 @@ def _parse_drop(data:dict, config_dir:Path) -> DropConfig:
         ValueError: On missing fields or invalid values.
         FileNotFoundError: If the touchstone file does not exist (raised via ValueError).
     """
-    required = {"tx_touchstone", "rx_touchstone"}
+    required = {"mpse_touchstone", "mpd_touchstone", "mpse_index"}
     missing = required - data.keys()
     if missing:
-        raise ValueError(f"drop section missing required keys: {sorted(missing)}")  
-    tx_touchstone_path = (config_dir / data["tx_touchstone"]).resolve()
-    rx_touchstone_path = (config_dir / data["rx_touchstone"]).resolve()
-    if not tx_touchstone_path.is_file():
-        raise ValueError(f"drop.touchstone file not found: {tx_touchstone_path}") 
-    if not rx_touchstone_path.is_file():
-        raise ValueError(f"drop.touchstone file not found: {rx_touchstone_path}") 
-    # phy_load_ohm: optional, defaults to 20 kΩ.
+        raise ValueError(f"drop section missing required keys: {sorted(missing)}")
+    mpse_path = (config_dir / data["mpse_touchstone"]).resolve()
+    if not mpse_path.is_file():
+        raise ValueError(f"drop.mpse_touchstone file not found: {mpse_path}")
+    mpd_path = (config_dir / data["mpd_touchstone"]).resolve()
+    if not mpd_path.is_file():
+        raise ValueError(f"drop.mpd_touchstone file not found: {mpd_path}")
+    mpse_index = int(data["mpse_index"])
+    if mpse_index < 0:
+        raise ValueError(f"drop.mpse_index must be non-negative, got {mpse_index}")
     phy_load_ohm = float(data.get("phy_load_ohm", 20000.0))
     if phy_load_ohm <= 0:
         raise ValueError(f"drop.phy_load_ohm must be positive, got {phy_load_ohm}")
-    return DropConfig(tx_touchstone=tx_touchstone_path, rx_touchstone=rx_touchstone_path, phy_load_ohm=phy_load_ohm)
+    return DropConfig(mpse_touchstone=mpse_path, mpd_touchstone=mpd_path, mpse_index=mpse_index, phy_load_ohm=phy_load_ohm)
 
 
 def _parse_cable(data:dict[str,Any]) -> CableParams:
