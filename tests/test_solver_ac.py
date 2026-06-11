@@ -7,7 +7,7 @@ import pytest
 
 from spmd_reflection.cable.cable_params import CableParams
 from spmd_reflection.drop.models import DropData
-from spmd_reflection.solver.ac import run_simulation, Z0_REFERENCE
+from spmd_reflection.solver.ac import run_simulation, Z0_TRANSMITTER
 from spmd_reflection.solver.model import SolverResults
 from spmd_reflection.drop.load import load_drop
 from spmd_reflection.topology.build import build_topology
@@ -57,7 +57,7 @@ def _ideal_drop(frequency_hz:np.ndarray) -> DropData:
 
 
 def test_tx_in_middle_sees_parallel_terminations():
-    """TX in the middle sees 50 Ω → S₁₁ = -1/3."""
+    """TX in the middle sees 50 Ω = Z0_TRANSMITTER → S₁₁ ≈ 0 (matched)."""
     freqs = _default_frequency_grid()
     topology = build_topology(
         drop_positions_m=[3.0],
@@ -68,12 +68,13 @@ def test_tx_in_middle_sees_parallel_terminations():
     result = run_simulation(
         topology=topology,
         cable_params=_lossless_cable(),
-        drop=_ideal_drop(freqs),
+        mpse_drop=_ideal_drop(freqs),
+        mpd_drop=_ideal_drop(freqs),
+        mpse_index=0,
         phy_load_ohm=20000.0,
         frequency_hz=freqs)
-    # Korrekt: Realteil ≈ -1/3, Imaginärteil ≈ 0
-    assert np.allclose(result.s11_tx.real, -1.0/3.0, atol=1e-4)
-    assert np.allclose(result.s11_tx.imag, 0.0, atol=1e-3)
+    # Two 100 Ω terminations in parallel = 50 Ω = Z0_TRANSMITTER → matched → S₁₁ ≈ 0.
+    assert np.allclose(np.abs(result.s11_tx), 0.0, atol=1e-3)
 
 
 def test_lossless_open_bus_has_unity_reflection():
@@ -88,7 +89,9 @@ def test_lossless_open_bus_has_unity_reflection():
     result = run_simulation(
         topology=topology,
         cable_params=_lossless_cable(),
-        drop=_ideal_drop(freqs),
+        mpse_drop=_ideal_drop(freqs),
+        mpd_drop=_ideal_drop(freqs),
+        mpse_index=0,
         phy_load_ohm=20000.0,
         frequency_hz=freqs)
     assert np.allclose(np.abs(result.s11_tx), 1.0, atol=1e-6)
@@ -106,7 +109,9 @@ def test_passive_bus_has_bounded_reflection():
     result = run_simulation(
         topology=topology,
         cable_params=_realistic_cable(),
-        drop=_ideal_drop(freqs),
+        mpse_drop=_ideal_drop(freqs),
+        mpd_drop=_ideal_drop(freqs),
+        mpse_index=0,
         phy_load_ohm=20000.0,
         frequency_hz=freqs)
     # Passive-check: |S₁₁| ≤ 1
@@ -131,7 +136,9 @@ def test_solver_results_have_correct_shapes():
     result = run_simulation(
         topology=topology,
         cable_params=_lossless_cable(),
-        drop=_ideal_drop(freqs),
+        mpse_drop=_ideal_drop(freqs),
+        mpd_drop=_ideal_drop(freqs),
+        mpse_index=0,
         phy_load_ohm=20000.0,
         frequency_hz=freqs)
     assert isinstance(result, SolverResults)
@@ -159,7 +166,9 @@ def test_rejects_mismatched_drop_frequency_grid():
         run_simulation(
             topology=topology,
             cable_params=_lossless_cable(),
-            drop=_ideal_drop(different_freqs),
+            mpse_drop=_ideal_drop(different_freqs),
+            mpd_drop=_ideal_drop(freqs),
+            mpse_index=0,
             phy_load_ohm=20000.0,
             frequency_hz=freqs)
         
@@ -178,7 +187,9 @@ def test_rejects_topology_without_tx():
         run_simulation(
             topology=topology,
             cable_params=_lossless_cable(),
-            drop=_ideal_drop(freqs),
+            mpse_drop=_ideal_drop(freqs),
+            mpd_drop=_ideal_drop(freqs),
+            mpse_index=0,
             phy_load_ohm=20000.0,
             frequency_hz=freqs)
         
@@ -195,7 +206,9 @@ def test_rx_phy_voltages_differ_between_drops():
     result = run_simulation(
         topology=topology,
         cable_params=_realistic_cable(),
-        drop=_ideal_drop(freqs),
+        mpse_drop=_ideal_drop(freqs),
+        mpd_drop=_ideal_drop(freqs),
+        mpse_index=0,
         phy_load_ohm=20000.0,
         frequency_hz=freqs)
     # Shape check.

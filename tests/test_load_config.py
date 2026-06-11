@@ -30,7 +30,7 @@ def _make_dummy_touchstone(path: Path) -> None:
     path.write_text("# Hz S RI R 100\n")
 
 
-def _valid_config_dict(touchstone_filename:str="drop.s2p") -> dict:
+def _valid_config_dict(touchstone_filename:str="drop_mpse.s2p") -> dict:
     """Produce a valid config dict for testing."""
     return {
         "frequency": {
@@ -46,7 +46,9 @@ def _valid_config_dict(touchstone_filename:str="drop.s2p") -> dict:
             "termination_ohm": 100.0,
         },
         "drop": {
-            "touchstone": touchstone_filename,
+            "mpse_touchstone": touchstone_filename,
+            "mpd_touchstone": "drop_mpd.s2p",
+            "mpse_index": 0,
             "phy_load_ohm": 20000.0,
         },
         "cable": {
@@ -59,13 +61,16 @@ def _valid_config_dict(touchstone_filename:str="drop.s2p") -> dict:
 
 
 def _write_config(tmp_path:Path, config_dict:dict) -> Path:
-    """Write a config dict to YAML and create dummy touchstone file."""
+    """Write a config dict to YAML and create dummy touchstone files."""
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(yaml.safe_dump(config_dict)) 
-    # Create the touchstone file referenced in the config.
-    if "drop" in config_dict and "touchstone" in config_dict["drop"]:
-        ts_filename = config_dict["drop"]["touchstone"]
-        _make_dummy_touchstone(tmp_path / ts_filename) 
+    config_path.write_text(yaml.safe_dump(config_dict))
+    drop = config_dict.get("drop", {})
+    for key in ("mpse_touchstone", "mpd_touchstone"):
+        if key in drop:
+            ts_path = (tmp_path / drop[key]).resolve()
+            ts_path.parent.mkdir(parents=True, exist_ok=True)
+            if not ts_path.exists():
+                _make_dummy_touchstone(ts_path)
     return config_path
 
 
@@ -87,7 +92,9 @@ def test_loads_complete_valid_config(tmp_path):
         tx_drop_index=0,
         termination_ohm=100.0)
     # Drop section.
-    assert config.drop.touchstone == (tmp_path / "drop.s2p").resolve()
+    assert config.drop.mpse_touchstone == (tmp_path / "drop_mpse.s2p").resolve()
+    assert config.drop.mpd_touchstone == (tmp_path / "drop_mpd.s2p").resolve()
+    assert config.drop.mpse_index == 0
     assert config.drop.phy_load_ohm == 20000.0
     # Cable section.
     assert config.cable.l_per_m == pytest.approx(413e-9)
@@ -100,12 +107,13 @@ def test_resolves_paths_in_subdirectory(tmp_path):
     """Touchstone path in subdirectory is correctly resolved."""
     subdir = tmp_path / "measurements"
     subdir.mkdir()
-    _make_dummy_touchstone(subdir / "drop.s2p")
-    config_dict = _valid_config_dict(touchstone_filename="measurements/drop.s2p") 
+    _make_dummy_touchstone(subdir / "drop_mpse.s2p")
+    _make_dummy_touchstone(tmp_path / "drop_mpd.s2p")
+    config_dict = _valid_config_dict(touchstone_filename="measurements/drop_mpse.s2p")
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml.safe_dump(config_dict))
     config = load_config(config_path)
-    assert config.drop.touchstone == (subdir / "drop.s2p").resolve()
+    assert config.drop.mpse_touchstone == (subdir / "drop_mpse.s2p").resolve()
 
 
 def test_raises_file_not_found_for_missing_config(tmp_path):
@@ -174,7 +182,7 @@ def test_rejects_missing_touchstone_file(tmp_path):
     config_dict = _valid_config_dict(touchstone_filename="nonexistent.s2p")
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml.safe_dump(config_dict))
-    with pytest.raises(ValueError, match="drop.touchstone file not found"):
+    with pytest.raises(ValueError, match="drop.mpse_touchstone file not found"):
         load_config(config_path)
 
 

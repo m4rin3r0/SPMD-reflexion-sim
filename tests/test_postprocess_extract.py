@@ -26,7 +26,8 @@ def _make_solver_results(frequency_hz:np.ndarray, s11_tx:np.ndarray, rx_phy_volt
         frequency_hz=frequency_hz,
         s11_tx=s11_tx,
         node_voltages=np.zeros((n_freq, n_nodes), dtype=complex),
-        rx_phy_voltages=rx_phy_voltages)
+        rx_phy_voltages=rx_phy_voltages,
+        tx_phy_voltages=np.full(n_freq, 0.5, dtype=complex))
 
 
 def _make_drop_with_admittance(frequency_hz:np.ndarray, y_trunk:complex, phy_load_ohm:float=20000.0) -> DropData:
@@ -60,7 +61,7 @@ def test_rl_is_zero_db_for_zero_reflection():
         tx_drop_index=0,
         termination_ohm=100.0)
     drop = _make_drop_with_admittance(freqs, y_trunk=0.0)
-    bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0)
+    bus = compute_bus_results(results, topology, drop, drop, 0, phy_load_ohm=20000.0, il_ms_db=None)
     expected_rl = -20.0 * np.log10(0.001)  # = 60 dB
     assert np.allclose(bus.rl_db, expected_rl, atol=1e-10)
 
@@ -78,7 +79,7 @@ def test_rl_is_6db_for_half_reflection():
         tx_drop_index=0,
         termination_ohm=100.0)
     drop = _make_drop_with_admittance(freqs, y_trunk=0.0)
-    bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0)
+    bus = compute_bus_results(results, topology, drop, drop, 0, phy_load_ohm=20000.0, il_ms_db=None)
     expected_rl = -20.0 * np.log10(0.5)  # = 6.0206 dB
     assert np.allclose(bus.rl_db, expected_rl, atol=1e-10)
 
@@ -97,7 +98,7 @@ def test_rx_to_tx_is_zero_db_at_matched_source_voltage():
         tx_drop_index=0,
         termination_ohm=100.0)
     drop = _make_drop_with_admittance(freqs, y_trunk=0.0)
-    bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0)
+    bus = compute_bus_results(results, topology, drop, drop, 0, phy_load_ohm=20000.0, il_ms_db=None)
     # RX/TX = -20*log10(0.5 / 0.5) = 0 dB.
     assert bus.rx_to_tx_db.shape == (n_freq, 1)
     assert np.allclose(bus.rx_to_tx_db, 0.0, atol=1e-10)
@@ -121,7 +122,7 @@ def test_rx_to_tx_is_positive_for_attenuated_signal():
         tx_drop_index=0,
         termination_ohm=100.0)
     drop = _make_drop_with_admittance(freqs, y_trunk=0.0)
-    bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0)
+    bus = compute_bus_results(results, topology, drop, drop, 0, phy_load_ohm=20000.0, il_ms_db=None)
     # RX/TX > 0 for both Drops (voltage under matched source voltage)
     assert np.all(bus.rx_to_tx_db > 0)
     # more damping -> higher IL
@@ -148,7 +149,7 @@ def test_il_tci_is_zero_db_for_invisible_drop():
         termination_ohm=100.0)
     # Y_drop = 0 → S21_TCI = 2 / (2 + 100 * 0) = 1 → IL = 0 dB.
     drop = _make_drop_with_admittance(freqs, y_trunk=0.0)
-    bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0)
+    bus = compute_bus_results(results, topology, drop, drop, 0, phy_load_ohm=20000.0, il_ms_db=None)
     assert bus.il_tci_db.shape == (n_freq, 1)
     assert np.allclose(bus.il_tci_db, 0.0, atol=1e-10)
 
@@ -169,7 +170,7 @@ def test_rl_tci_is_high_for_matched_drop():
         termination_ohm=100.0)  
     y0 = 1.0 / Z0_REFERENCE
     drop = _make_drop_with_admittance(freqs, y_trunk=y0) 
-    bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0)
+    bus = compute_bus_results(results, topology, drop, drop, 0, phy_load_ohm=20000.0, il_ms_db=None)
     # S11 = -Z0*Y0 / (2 + Z0*Y0) = -1/3 → RL = -20*log10(1/3) ≈ 9.54 dB
     expected_rl = -20.0 * np.log10(1.0 / 3.0)
     assert np.allclose(bus.rl_tci_db, expected_rl, atol=1e-6)
@@ -192,7 +193,7 @@ def test_il_tci_and_rl_tci_have_correct_shape():
         np.zeros(n_freq, dtype=complex),
         np.zeros((n_freq, 2), dtype=complex))
     drop = _make_drop_with_admittance(freqs, y_trunk=0.0)
-    bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0)
+    bus = compute_bus_results(results, topology, drop, drop, 0, phy_load_ohm=20000.0, il_ms_db=None)
     assert bus.il_tci_db.shape == (n_freq, n_drops)
     assert bus.rl_tci_db.shape == (n_freq, n_drops)
 
@@ -213,7 +214,7 @@ def test_ms_il_db_is_none():
         freqs,
         np.zeros(n_freq, dtype=complex),
         np.zeros((n_freq, 0), dtype=complex))
-    bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0, il_ms_db=ms_il)
+    bus = compute_bus_results(results, topology, drop, drop, 0, phy_load_ohm=20000.0, il_ms_db=ms_il)
     assert bus.il_ms_db is not None
     assert bus.il_ms_db.shape == (n_freq,)
 
@@ -237,7 +238,7 @@ def test_bus_results_all_shapes_correct():
         np.full(n_freq, 0.1, dtype=complex),
         rx_phy_voltages)
     drop = _make_drop_with_admittance(freqs, y_trunk=0.0) 
-    bus = compute_bus_results(results, topology, drop, phy_load_ohm=20000.0, il_ms_db=np.zeros(n_freq))
+    bus = compute_bus_results(results, topology, drop, drop, 0, phy_load_ohm=20000.0, il_ms_db=np.zeros(n_freq))
     assert isinstance(bus, BusResults)
     assert bus.frequency_hz.shape == (n_freq,)
     assert bus.rl_db.shape == (n_freq,)
