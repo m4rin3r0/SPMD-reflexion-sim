@@ -2,10 +2,12 @@
 
 Computes the time-domain response of the bus by inverse FFT of the
 frequency-domain transfer function H(ω) = V_RX / V_TX, convolves it
-with a synthetic PAM3 signal, and segments the result for eye diagram
-visualization.
+with a synthetic Differential Manchester Encoded (DME) signal, and segments
+the result for eye diagram visualization.
 
-10BASE-T1M uses PAM3 signaling at 7.5 MBaud symbol rate.
+Differential Manchester Encoding encodes data via transitions: a transition
+at the start of a bit period represents a 0, no transition represents a 1.
+A mandatory mid-bit transition is always present.
 
 Usage:
     from spmd_reflection.postprocess.eye import compute_eye_diagram, plot_eye_diagram
@@ -46,22 +48,32 @@ class EyeDiagramData:
     symbol_period_s: float
 
 
-def _generate_baseband_signal(n_symbols:int, samples_per_symbol:int, rng:np.random.Generator) -> np.ndarray:
-    """Generate a random binary baseband signal.
+def _generate_differential_manchester_signal(n_symbols: int, samples_per_symbol: int, rng: np.random.Generator) -> np.ndarray:
+    """Generate a random Differential Manchester Encoded signal.
 
-    Each symbol is one of {-1, +1}, held for samples_per_symbol samples
-    (rectangular pulse shaping).    
+    Encoding rules:
+        - bit=0: transition at start of bit period + mandatory mid-bit transition.
+        - bit=1: no transition at start of bit period + mandatory mid-bit transition.
 
     Args:
-        n_symbols: Number of symbols to generate.
-        samples_per_symbol: Oversampling factor.
+        n_symbols: Number of bits to encode.
+        samples_per_symbol: Oversampling factor (samples per bit period).
         rng: NumPy random generator for reproducibility.
 
     Returns:
         1D array of length n_symbols * samples_per_symbol.
     """
-    symbols = rng.choice([-1.0, 1.0], size=n_symbols)
-    return np.repeat(symbols, samples_per_symbol)
+    bits = rng.integers(0, 2, size=n_symbols)
+    half = samples_per_symbol // 2
+    level = 1.0
+    samples = []
+    for bit in bits:
+        if bit == 0:
+            level = -level
+        samples.extend([level] * half)
+        level = -level
+        samples.extend([level] * (samples_per_symbol - half))
+    return np.array(samples, dtype=float)
 
 
 def _compute_transfer_function(tx_voltage:np.ndarray, rx_voltage:np.ndarray) -> np.ndarray:
@@ -109,18 +121,18 @@ def compute_eye_diagram(tx_voltage:np.ndarray, rx_voltage:np.ndarray, frequency_
     Steps:
         1. Compute transfer function H(ω) = V_RX / V_TX.
         2. Convert H(ω) to impulse response h(t) via IFFT.
-        3. Generate a random PAM3 signal.
-        4. Convolve PAM3 signal with h(t) to get the received signal.
+        3. Generate a random Differential Manchester Encoded signal.
+        4. Convolve DME signal with h(t) to get the received signal.
         5. Segment the received signal into 2-symbol-period windows.
 
     Args:
         tx_voltage: Complex TX-PHY voltage, shape (n_freq,).
         rx_voltage: Complex RX-PHY voltage, shape (n_freq,).
         frequency_hz: Frequency grid in Hz, shape (n_freq,).
-        n_symbols: Number of PAM3 symbols to simulate.
+        n_symbols: Number of DME bits to simulate.
         samples_per_symbol: Oversampling factor for time-domain signal.
-        symbol_rate: Symbol rate in Baud (default 7.5 MBaud for 10BASE-T1M).
-        seed: Random seed for reproducible PAM3 sequence.
+        symbol_rate: Symbol rate in Baud.
+        seed: Random seed for reproducible DME sequence.
 
     Returns:
         EyeDiagramData with time axis and overlaid signal segments.
@@ -130,7 +142,7 @@ def compute_eye_diagram(tx_voltage:np.ndarray, rx_voltage:np.ndarray, frequency_
     h_freq = _compute_transfer_function(tx_voltage, rx_voltage)
     h_t = _transfer_function_to_impulse_response(h_freq, len(frequency_hz), fs)
     rng = np.random.default_rng(seed)
-    tx_signal = _generate_baseband_signal(n_symbols, samples_per_symbol, rng)
+    tx_signal = _generate_differential_manchester_signal(n_symbols, samples_per_symbol, rng)
     rx_signal = np.convolve(tx_signal, h_t, mode="full")
     # Adding noise
     signal_power = np.mean(rx_signal**2)
